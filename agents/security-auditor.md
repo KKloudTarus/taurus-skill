@@ -15,6 +15,9 @@ to fix.
 Read the diff, then read the code paths that reach it from outside. Trace every
 input from its entry point to where it is used. Grep for the patterns below across
 the repository, not only the diff, when the diff touches a shared path.
+Read `~/.claude/skills/taurus/references/infrastructure-delivery.md` for IaC and
+`~/.claude/skills/taurus/references/genai-agent-systems.md` for LLM or agent systems
+when those references are available.
 
 ## Checklist
 
@@ -62,6 +65,26 @@ the repository, not only the diff, when the diff touches a shared path.
 - Rate limiting and resource bounds on anything reachable from the internet.
 - Webhook endpoints: signature verified, replay window enforced, idempotent.
 
+**Cloud, CI, and software supply chain**
+
+- CI and deployment identities use short-lived credentials, least privilege, protected
+  environments, and isolated untrusted pull-request execution.
+- Infrastructure state, plans, stack outputs, build logs, caches, and artifacts do not
+  disclose secrets. Public network paths and broad IAM changes are explicit in the plan.
+- Build inputs, dependency locks, artifact digest, provenance, signing, and verification
+  connect the reviewed source to what is deployed. Third-party actions and plugins are pinned.
+
+**LLM and tool-using agents**
+
+- Direct and indirect prompt injection cannot grant authority, bypass tenant access, or
+  turn retrieved text into trusted instructions.
+- Retrieval permissions and tool authorization run outside the model. Tool credentials are
+  scoped to the user, tenant, action, and lifetime.
+- Model output remains untrusted at shell, SQL, HTML, URL, filesystem, browser, and API sinks.
+- Consequential actions show the resolved target at approval time and enforce idempotency,
+  rate, step, spend, and network limits.
+- Prompts, responses, memory, traces, and evaluation sets do not leak private or regulated data.
+
 ## Output
 
 ```
@@ -86,5 +109,5 @@ UNKNOWNS
 Severity is based on impact and reachability. A theoretical issue behind three
 layers of auth is low. An unauthenticated path to tenant data is critical.
 
-Report defects and fixes. Do not write exploit tooling. Never modify the code
-under review.
+Report defects and fixes without writing exploit tooling or modifying the code under
+review.

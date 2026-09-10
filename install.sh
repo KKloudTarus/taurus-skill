@@ -275,6 +275,10 @@ write_memory_block
 [ "$DO_GITIGNORE" = 1 ] && write_gitignore
 
 say ""
-say "Installed. Start a new Claude Code session to pick it up."
+if [ "$DRY_RUN" = 1 ]; then
+  say "Dry run complete. No changes were made."
+else
+  say "Installed. Start a new Claude Code session to pick it up."
+fi
 say "Commands: /deliver  /verify  /panel  /ship  /style"
 say "Update:   git -C $REPO pull"

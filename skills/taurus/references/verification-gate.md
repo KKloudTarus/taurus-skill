@@ -1,94 +1,158 @@
-> Load when: The three mandatory checks that run before any change is declared done - QA correctness, security audit, performance audit - executed by independent agents in parallel and then verified against the code. Load before saying a task is finished, before marking a PR ready, and before any commit that changes behavior.
+> Load when: Collecting evidence before declaring work complete or ready to ship. Defines tier-aware checks, reviewer selection, finding resolution, and the machine-readable verification artifact tied to the current Git worktree.
 
 # Verification gate
 
-Nothing is done until three independent checks have run against it and their
-findings are resolved. Self-review by the author who wrote the code catches the
-defects the author was already thinking about, which are the ones already fixed.
+Verification scales with the risk tier selected in `references/engineering-baseline.md`.
+Every tier records what was checked, but only tier 0 always runs QA, security, and
+performance reviewers.
 
-## Preconditions
+## Establish scope
 
-Run these yourself first. A gate over a red build wastes three agents.
+Read the status and diff before running commands. Record the tier, changed surface,
+invariants, risk domains, and one primary risk. Supported labels are:
 
+```text
+behavior       security        performance      architecture
+algorithm      database        migration        operations
+reliability    sre             observability    infrastructure
+supply_chain   frontend        accessibility    api_contract
+data           model           ml               ai_safety
+llm_security   cost            documentation    mechanical
 ```
-<build command>          # must pass
-<test command>           # must pass, full suite, not a filtered subset
-<lint + type check>      # must pass
-git diff --stat          # know exactly what is in scope
-```
 
-Paste real output. Never describe a test run you did not perform.
+Run each project check that applies to the changed surface. The artifact has slots for
+`build`, `tests`, `lint`, and `typecheck`. Use `not_applicable` only when the project
+has no corresponding command or the changed surface cannot exercise it, and record a
+reason. A failing applicable check keeps the gate red.
 
-## The three checks
+## Review by tier
 
-Spawn all three in a single message so they run concurrently. Give each the diff
-scope, the invariants from engineering-baseline.md, and the commands to run.
+**Tier 0.** Run `qa-verifier`, `security-auditor`, and `performance-auditor`
+concurrently after local checks pass. Add `reliability-auditor` when a database,
+migration, SRE, observability, operational, or reliability domain is in scope. Add
+`platform-auditor` for infrastructure or supply-chain risk,
+`frontend-quality-auditor` for frontend or accessibility risk, and `ai-ml-verifier`
+for data, model, ML, or AI-safety risk. Run the review panel required by the baseline.
 
-### QA correctness (qa-verifier)
+**Tier 1.** Run one reviewer matched to the primary risk. A secondary domain that has
+a dedicated specialist also requires that specialist. Escalate to tier 0 when the
+change exposes two independent high-impact risks.
 
-Answers: does this do what it claims, and what input makes it fail?
+**Tier 2.** Perform self-review and focused validation. Do not spawn a reviewer unless
+the diff reveals behavior or risk that changes the tier.
 
-- Acceptance criteria met, each one traced to a test
-- Boundaries: empty, one, many, maximum, negative, zero, null, unicode, timezone
-- Failure paths: dependency down, timeout, partial write, malformed input
-- Concurrency: two writers, retry, duplicate delivery, out-of-order arrival
-- Idempotency where the operation has side effects
-- Regression risk in code paths the diff touches indirectly
-- Test quality: does a test fail when the behavior is broken? Verify by breaking it.
+Give each reviewer the same scope, relevant invariants, diff, and commands. Verify
+every finding against the code or a reproduction before accepting it.
 
-### Security audit (security-auditor)
+## Resolve findings
 
-Answers: what can an attacker do that the author did not intend?
-
-- Authentication and authorization on every new path, including the object level
-- Input validation and output encoding: injection, SSRF, path traversal, deserialization
-- Secrets: hardcoded, logged, in fixtures, in error messages, in URLs
-- Data exposure: PII in logs, over-broad API responses, error messages that leak internals
-- Crypto: no homemade schemes, no fixed IV, no MD5 or SHA1 for security, no math/random
-- Dependencies: known CVEs, unpinned versions, install scripts
-- Multi-tenancy: every query scoped to the tenant, no cross-tenant read
-- Rate limits and resource bounds on anything reachable from outside
-
-### Performance audit (performance-auditor)
-
-Answers: what happens at 100x the current load?
-
-- Complexity of every new loop, query, and recursion, stated with the expected N
-- N+1 queries, missing indexes, full table scans, SELECT * on wide tables
-- Allocations in hot paths, copies of large structures, unbounded buffers
-- Blocking calls on request paths, serial calls that could be concurrent
-- Connection pool, goroutine, thread, and queue bounds
-- Cache correctness: invalidation, stampede, TTL under a cold start
-- Payload size, N round trips, chattiness across a network boundary
-- A measurement for any performance claim: before and after, same conditions
-
-## Resolving findings
-
-Every finding gets verified by you against the code before it is acted on. Agents
-report false positives, and fixing a false positive adds a defect.
-
-| Severity | Rule |
+| Severity | Required action |
 |---|---|
-| Critical | Data loss, money loss, auth bypass, corruption. Fix before the gate can pass. |
-| High | Wrong behavior on a real input, or a performance cliff under expected load. Fix now. |
-| Medium | Edge case, missing test, avoidable cost. Fix now, or record the reason and the ticket. |
-| Low | Style, naming, minor cleanup. Fix if the diff is already open. |
+| Critical | Fix before completion; data loss, money loss, corruption, or auth bypass keeps the gate red |
+| High | Fix before completion; real wrong behavior or expected-load failure keeps the gate red |
+| Medium | Fix or defer with a concrete reason and follow-up |
+| Low | Fix when useful, or record why it does not belong in this change |
 
-The gate passes when zero critical and zero high findings remain open.
+Agreement between reviewers is not evidence by itself. Mark each finding as fixed,
+deferred, or rejected and preserve the reason.
 
-## Report
+## Machine-readable report
+
+Prepare a JSON input document with this shape:
+
+```json
+{
+  "tier": 1,
+  "tier_reason": "user-visible checkout behavior",
+  "scope": "working tree",
+  "risk_domains": ["behavior"],
+  "primary_risk": "behavior",
+  "checks": {
+    "build": {"status": "pass", "command": "npm run build", "exit_code": 0, "evidence": "build completed"},
+    "tests": {"status": "pass", "command": "npm test", "exit_code": 0, "evidence": "214 passed"},
+    "lint": {"status": "pass", "command": "npm run lint", "exit_code": 0, "evidence": "0 findings"},
+    "typecheck": {"status": "not_applicable", "reason": "project has no type checker"}
+  },
+  "domain_checks": {},
+  "reviewers": [
+    {"agent": "qa-verifier", "verdict": "pass", "critical": 0, "high": 0, "medium": 0, "low": 0, "evidence": "boundary and failure tests passed"}
+  ],
+  "self_review": {"status": "pass", "evidence": "complete diff read after tests"},
+  "findings": []
+}
+```
+
+Add the check required by each selected specialist domain. It uses the same `status`,
+`command`, `exit_code`, `evidence`, and `not_applicable` rules as the base checks.
+
+| Risk domain | Required domain check |
+|---|---|
+| `infrastructure` | `plan` |
+| `supply_chain` | `provenance` |
+| `sre` | `slo` |
+| `observability` | `telemetry` |
+| `frontend` | `browser` |
+| `accessibility` | `accessibility` |
+| `api_contract` | `contract` |
+| `data`, `model`, `ml` | `evaluation` |
+| `ai_safety` | `safety_eval` |
+| `llm_security` | `security_eval` |
+| `cost` | `cost` |
+
+For example, an infrastructure report records the exact current plan:
+
+```json
+{
+  "domain_checks": {
+    "plan": {
+      "status": "pass",
+      "command": "tofu plan -out=review.tfplan",
+      "exit_code": 0,
+      "evidence": "2 add, 1 change, 0 destroy"
+    }
+  }
+}
+```
+
+Tier 0 also includes a panel record with its actual participants:
+
+```json
+{
+  "panel": {
+    "verdict": "pass",
+    "agents": ["architecture-critic", "qa-verifier", "security-auditor"],
+    "evidence": "three independent reports checked against the final diff"
+  }
+}
+```
+
+Write the report after all checks and finding resolution:
 
 ```
+python3 ~/.claude/taurus/hooks/gate-report.py write /tmp/taurus-gate-input.json
+python3 ~/.claude/taurus/hooks/gate-report.py validate
+```
+
+The default output is `.git/taurus/verification.json`. The writer adds UTC time,
+repository root, HEAD, and a fingerprint covering tracked changes, staged changes,
+untracked paths, and untracked file content. `validate` fails when the report is red,
+the schema is incomplete, the tier lacks its required reviewers, or the worktree has
+changed since the report was written.
+
+The artifact records evidence; it does not make an unverified claim true. Command
+status, exit codes, and reviewer counts must come from actual output. Every finding
+must be fixed, deferred with a reason, or rejected with a reason before the report can
+pass. Critical and high findings cannot be deferred.
+
+## Human report
+
+Summarize the same artifact without pasting raw reviewer output:
+
+```
+TIER: <0|1|2> - <reason>
+CHECKS: build <status>, tests <status>, lint <status>, typecheck <status>, domain <statuses>
+REVIEWERS: <agents and verdicts, or self-review>
+FINDINGS: <fixed, deferred, rejected; none open>
+ARTIFACT: .git/taurus/verification.json - current
 GATE: pass | fail
-Build: pass    Tests: 214 passed, 0 failed    Lint: clean
-
-QA          - <n> findings: <n> fixed, <n> deferred, <n> rejected
-Security    - <n> findings: ...
-Performance - <n> findings: ...
-
-Deferred: <finding> - <reason> - <ticket>
-Rejected: <finding> - <why it is false>
 ```
-
-For tier 0 changes, review-panel.md runs after this gate, with the gate reports as
-input. The panel decides whether the fixes were the right fixes.

@@ -1,5 +1,5 @@
 ---
-description: Lint text or files against the Taurus writing standard and rewrite the findings
+description: Review text for a natural technical voice and use the prose linter as a supporting signal
 argument-hint: [file ...] (defaults to changed markdown files)
 ---
 
@@ -15,12 +15,12 @@ Load the `taurus` skill, then read `references/writing-voice.md`.
 python3 ~/.claude/taurus/hooks/lint-prose.py --severity warn <files>
 ```
 
-3. Rewrite every error finding. For each one, show the before and after line so the
-   change is reviewable. Warnings get judgment: fix the ones that are real, and say
-   which you kept and why.
-4. Read the result once for what the linter cannot see: a paragraph that says
-   nothing, a claim with no number behind it, a sentence written to sound thorough,
-   a conclusion the reader already reached two lines earlier.
-5. Re-run the linter and show it clean.
+3. Fix every publishing-policy error. Treat warnings as prompts to reread the passage,
+   not instructions to replace a word mechanically. Keep useful transitions,
+   contrasts, and signs of warmth.
+4. Read the result aloud. Check whether it responds to this reader, whether related
+   facts flow together, whether sentence lengths vary, and whether the level of detail
+   fits the conversation. Remove unsupported precision and report-like formatting.
+5. Re-run the linter. Report any warning you intentionally kept and why it helps.
 
 Rewrite the prose. Never rewrite code inside fenced blocks.

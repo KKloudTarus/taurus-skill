@@ -1,67 +1,57 @@
 ---
-description: Run a task end to end under the Taurus delivery standard - interrogate, design, test, implement, verify, review
+description: Deliver a change under a risk-tiered Taurus workflow, from repository inspection through current verification evidence
 argument-hint: <what to build or fix>
 ---
 
 Deliver this under the Taurus standard: **$ARGUMENTS**
 
-Load the `taurus` skill, then read `references/engineering-baseline.md` and follow it. Work through these phases and
-report at each boundary.
+Load the `taurus` skill and read `references/engineering-baseline.md`. Inspect the
+repository, state the tier with its reason, then follow only that tier's workflow.
 
-## 1. Interrogate
+## Shared start
 
-Answer the six questions from `references/engineering-baseline.md` section 1 in the response, in
-under fifteen lines: real outcome, blast radius, what already exists in this
-codebase, invariants, workload numbers, out of scope.
+Clarify the outcome, existing implementation, relevant invariants, important workload
+or boundary, and out-of-scope work. Keep this compact unless the change is tier 0.
+Escalate the tier if investigation reveals more risk than the request suggested.
 
-Search the codebase before answering "what already exists". Assign the rigor tier
-and say why.
+## Tier 0
 
-## 2. Design
+Write the design note and run its decision through `references/review-panel.md` before
+implementation. Read the architecture, system-design, testing, or algorithm reference
+that matches the change, plus the routed infrastructure, SRE, frontend, ML, or GenAI
+reference when one of those domains is in scope. Add failure and concurrency tests where
+those risks exist.
 
-Tier 0 and tier 1: write the design note (problem, invariants, approach, two
-rejected alternatives with reasons, failure modes, rollback). Load `references/system-design.md`
-when the change crosses a service, API, schema, or async boundary. Load
-`references/clean-architecture.md` for placement, `references/algorithm-rigor.md` for anything with a
-complexity worth stating.
+After implementation and self-review, run all project checks and the full tier 0 gate
+from `references/verification-gate.md`. Resolve findings, run the final panel, and
+write the current gate artifact.
 
-Tier 0: run the design through `references/review-panel.md` before writing code.
+## Tier 1
 
-## 3. Tests first
+Write acceptance criteria and a short design note only when the implementation has a
+meaningful choice. Add behavior tests, implement the smallest complete change, and run
+the project checks relevant to that surface. Model and GenAI changes use evaluation cases
+as behavior tests. Ask the matched reviewer and any required secondary specialist to
+inspect the change, resolve the findings, and write the gate artifact.
 
-Read `references/test-discipline.md`. Write the tests that would fail today: the invariant, the
-boundaries, the failure paths, the concurrency behavior. Run them and show them failing.
+## Tier 2
 
-## 4. Implement
+Make the scoped edit directly. Do not manufacture a design note, red-test phase, or
+agent panel for documentation, formatting, or another mechanical change. Run focused
+validation, review the diff, and write a tier 2 gate artifact. Escalate if behavior
+changed unexpectedly.
 
-Smallest change that makes the tests pass and holds the dependency direction. No
-speculative generality. Match the surrounding code's idiom.
-
-## 5. Self-review
-
-Read the whole diff as if someone else wrote it. Check it against the
-`references/engineering-baseline.md` definition of done. Fix what you find before spending agent time.
-
-## 6. Verification gate
-
-Read `references/verification-gate.md`. Run build, full test suite, lint, and type check yourself
-first, then spawn `qa-verifier`, `security-auditor`, and `performance-auditor` in a
-single message. Verify each finding against the code before acting on it. Report
-the gate result.
-
-## 7. Review panel
-
-Tier 0, or any decision made along the way: load `references/review-panel.md`, run 2 to 3
-independent agents, synthesize against the code without deferring to any of them.
-
-## 8. Report
+## Report
 
 ```
-TIER: <n>  <one-line reason>
+TAURUS ROUTE: tier=<0|1|2>; refs=<loaded references>; review=<panel|agents|self>
+TIER: <0|1|2> - <reason>
 CHANGED: <files>
-TESTS: <n added>  suite: <n passed, n failed>
-GATE: <qa / security / performance results>
+CHECKS: <commands and results>
+REVIEWERS: <agents, or self-review for tier 2>
+GATE: <pass|fail> - .git/taurus/verification.json
 OPEN: <deferred findings with reasons, or none>
 ```
 
-Do not commit unless asked. When asked, follow `references/git-discipline.md`.
+Do not commit, push, open a PR, deploy, or mutate an external system unless the user
+asked for that action. When asked to ship, read `references/git-discipline.md`.

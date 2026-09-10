@@ -87,8 +87,8 @@ class TestCommitMsgHook(HookTestCase):
         self.write("b.txt", "b\n")
         self.assertRejected(git(self.repo, "commit", "-q", "-am", "added stuff"))
 
-    def test_rejects_an_em_dash(self):
-        self.assertRejected(self.commit("fix: raise pool — p99 was 1.8s", "--allow-empty"))
+    def test_accepts_an_em_dash(self):
+        self.assertAccepted(self.commit("fix: raise pool — p99 was 1.8s", "--allow-empty"))
 
     def test_rejects_a_message_built_by_expansion(self):
         """The spelling the guard cannot read is exactly what this layer is for."""

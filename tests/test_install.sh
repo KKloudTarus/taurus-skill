@@ -126,6 +126,8 @@ setup
 out="$(bash "$REPO/install.sh" --dry-run --no-gitignore --no-githooks 2>&1)"
 check_not "dry run creates nothing"                 test -d "$CLAUDE_CONFIG_DIR"
 check "dry run reports actions"                     grep -q "would:" <<<"$out"
+check "dry run reports no changes"                  grep -q "Dry run complete. No changes were made." <<<"$out"
+check_not "dry run does not claim installation"     grep -q "^Installed\." <<<"$out"
 teardown
 
 setup

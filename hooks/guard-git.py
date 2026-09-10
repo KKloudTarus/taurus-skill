@@ -3,7 +3,7 @@
 
 Blocks four classes of mistake:
   1. AI attribution in commit messages (Claude / Anthropic / Co-Authored-By / robot emoji).
-  2. Commit messages that break the writing standard or Conventional Commits 1.0.0.
+  2. Commit messages that break publishing policy or Conventional Commits 1.0.0.
   3. Staging or committing .claude/, CLAUDE.md, AGENTS.md, .mcp.json.
   4. Pushing a range whose commits touch those paths.
 

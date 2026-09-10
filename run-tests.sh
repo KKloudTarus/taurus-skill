@@ -13,6 +13,7 @@ run_suite() {
 
 run_suite "prose linter"   python3 tests/test_lint_prose.py
 run_suite "commit linter"  python3 tests/test_lint_commit.py
+run_suite "gate report"    python3 tests/test_gate_report.py
 run_suite "git guard"      python3 tests/test_guard_git.py
 run_suite "git hooks"      python3 tests/test_git_hooks.py
 run_suite "installer"      bash    tests/test_install.sh

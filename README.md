@@ -43,38 +43,58 @@ no longer resolve, so a rename or a consolidation leaves nothing stale behind.
 
 | Command | Does |
 |---|---|
-| `/deliver <task>` | Full pipeline: interrogate, design, test, implement, verify, review |
-| `/verify [scope]` | Three-agent gate: QA, security, performance, in parallel |
+| `/deliver <task>` | Risk-tiered delivery from inspection through verification evidence |
+| `/verify [scope]` | Tier-aware checks, reviewers, and a worktree-bound JSON report |
 | `/panel <question>` | 2 to 3 independent agents on a decision, then an unbiased synthesis |
 | `/ship [subject]` | Pre-commit audit, atomic commits, PR body |
-| `/style [files]` | Lint prose against the writing standard and rewrite the findings |
+| `/style [files]` | Review prose for natural voice and inspect linter signals |
 
 ## The skill
 
 One skill, `taurus`, so the picker shows one entry. Its `SKILL.md` carries the rules
 that apply to every task and routes to the reference that carries the depth.
 
+Claude sees the skill name and description during selection. It loads the router only
+when Taurus applies, then reads the engineering baseline and the smallest set of
+references required by the actual risk. It does not preload the reference directory.
+Engineering work reports that choice once:
+
+```text
+TAURUS ROUTE: tier=1; refs=engineering-baseline,infrastructure-delivery; review=agents
+```
+
+Review cost follows the same tier. Tier 0 uses the full panel, tier 1 uses the matched
+reviewer and only necessary specialists, and tier 2 stays with focused checks and
+self-review. An extra panel requires an explicit request, a hard-to-reverse decision,
+or unresolved material evidence.
+
 | Reference | Covers |
 |---|---|
 | `engineering-baseline.md` | Interrogation questions, rigor tiers, work sequence, definition of done |
-| `writing-voice.md` | The banned LLM constructions, the rewrite recipes, the linter |
+| `writing-voice.md` | Natural technical voice, artifact-specific tone, and linter limits |
 | `git-discipline.md` | Branching, commits, PRs, no AI attribution, no local agent config in any repo |
 | `conventional-commits.md` | The full Conventional Commits 1.0.0 grammar, allowed types, footers, breaking changes |
-| `clean-architecture.md` | Layering, dependency direction, ports, per-language layouts |
+| `clean-architecture.md` | Hexagonal boundaries, idiomatic Go packages, and feature-oriented frontend structure |
 | `test-discipline.md` | What to test, doubles, layers, correctness-critical extras |
 | `algorithm-rigor.md` | Complexity against a stated N, query plans, concurrency, pattern selection |
 | `system-design.md` | Boundaries, data, async, resilience, API contracts, caching, observability |
-| `verification-gate.md` | The three checks that run before anything is called done |
+| `infrastructure-delivery.md` | Terraform, OpenTofu, Pulumi, Kubernetes, CI/CD, state, plans, policy, rollout |
+| `sre-operations.md` | SLI/SLO, error budgets, observability, capacity, incidents, recovery |
+| `frontend-quality.md` | Accessibility, browser behavior, async UI states, contracts, Web Vitals |
+| `ml-engineering.md` | Data lineage, leakage, reproducibility, evaluation, skew, drift, model rollout |
+| `genai-agent-systems.md` | LLM and RAG evals, retrieval permissions, tool safety, memory, cost, rollout |
+| `verification-gate.md` | Tier-aware checks and the machine-readable gate report |
 | `review-panel.md` | The 2 to 3 agent protocol and the synthesis that trusts none of them |
-| `rewrites.md` | Before and after examples for every banned construction |
+| `rewrites.md` | Contextual rewrites for stiff, generic, or over-compressed prose |
 | `checklists.md` | Reviewing a PR, debugging, refactoring, dependencies, migrations, incidents |
 
 ## Agents
 
-All six are read-only. None can edit the code they review.
+All ten are read-only. None can edit the code they review.
 
 `qa-verifier` · `security-auditor` · `performance-auditor` · `architecture-critic` ·
-`algorithm-verifier` · `decision-analyst`
+`algorithm-verifier` · `reliability-auditor` · `platform-auditor` ·
+`frontend-quality-auditor` · `ai-ml-verifier` · `decision-analyst`
 
 Each returns a structured report with a verdict, a confidence level, findings
 anchored to `file:line`, and its unknowns. The caller verifies every finding against
@@ -82,12 +102,11 @@ the code before acting on it.
 
 ## Enforcement
 
-Three mechanisms run outside the model's judgment.
+Four mechanisms run outside the model's judgment.
 
 **Git guard** (`hooks/guard-git.py`, wired as a `PreToolUse` hook on Bash). Blocks:
 
 - a commit message carrying AI attribution, a `Co-Authored-By` trailer, or a robot emoji
-- a commit message that breaks the writing standard
 - a commit message that breaks Conventional Commits 1.0.0
 - staging, committing, or pushing `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`
 - a broad `git add` that would sweep any of those in
@@ -113,7 +132,8 @@ python3 hooks/lint-prose.py --severity warn --format json README.md
 echo "$MSG" | python3 hooks/lint-prose.py --stdin --profile commit
 ```
 
-Exit 0 clean, 1 findings, 2 usage error. Suppress with
+Exit 0 means no finding reached the configured failure threshold; warnings may still
+be printed. Exit 1 means the threshold was reached, and exit 2 is a usage error. Suppress with
 `<!-- prose-lint-disable -->` and `<!-- prose-lint-enable -->`, or
 `prose-lint-disable-line` on a single line. Code fences, inline code, and URLs are
 skipped automatically.
@@ -131,6 +151,20 @@ python3 hooks/lint-commit.py --stdin --pr-title <<< "$PR_TITLE"
 Same exit codes. Messages git generates itself are skipped: `Merge ...`, `Revert "..."`,
 `fixup!`, `squash!`.
 
+**Gate report** (`hooks/gate-report.py`). Writes and validates a machine-readable
+verification result bound to the current commit and worktree. The default report is
+`.git/taurus/verification.json`, so it stays out of the project tree.
+
+```bash
+python3 hooks/gate-report.py write /tmp/taurus-gate-input.json
+python3 hooks/gate-report.py validate
+python3 hooks/gate-report.py fingerprint
+```
+
+A changed commit, tracked file, untracked file, or symlink makes the report stale.
+The schema enforces tier-specific checks, domain evidence such as an infrastructure
+plan or model evaluation, reviewers, and unresolved findings.
+
 ## Using it in a project's CI
 
 ```yaml
@@ -138,8 +172,9 @@ Same exit codes. Messages git generates itself are skipped: `Merge ...`, `Revert
 - run: python3 ~/.claude/taurus/hooks/lint-commit.py --stdin --pr-title <<< "$PR_TITLE"
 ```
 
-The installer already wires the same checks into every repo through
-`core.hooksPath`, so nothing per-repo is needed.
+The installer already wires the Git-side checks into every repo through
+`core.hooksPath`. The gate report is local evidence for the exact pre-ship worktree;
+CI should still run its own build, test, lint, and type-check jobs.
 
 ## Tests
 
@@ -147,9 +182,8 @@ The installer already wires the same checks into every repo through
 ./run-tests.sh
 ```
 
-Six suites: the prose linter, the commit linter, the git guard, the git hooks
-against real repositories, the installer against an isolated config directory, and
-the pack's own structure. The structure
+Seven suites: the prose linter, commit linter, gate report, git guard, git hooks,
+installer against an isolated config directory, and the pack's own structure. The structure
 suite lints every markdown file in the pack against the standard it ships, replays
 every commit in this repo's history through the commit linter, and validates every
 commit example the documentation prints, so the pack cannot violate its own rules.
@@ -162,8 +196,8 @@ skills/taurus/SKILL.md  the one model-invoked skill, a router plus the core rule
 skills/taurus/references/  the depth, read on demand, invisible to the picker
 agents/<name>.md        specialist subagents
 commands/<name>.md      slash commands
-hooks/                  guard-git.py, lint-prose.py, lint-commit.py, shellscan.py
+hooks/                  guards, linters, shell scanner, gate report writer
 githooks/               commit-msg, pre-commit, pre-push, wired via core.hooksPath
-tests/                  the six suites
+tests/                  the seven suites
 install.sh              installer, updater, uninstaller
 ```

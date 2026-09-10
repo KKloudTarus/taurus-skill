@@ -3,7 +3,8 @@ description: Pre-commit audit, then commit and optionally open a PR under git-di
 argument-hint: [commit subject]
 ---
 
-Prepare this change to ship. Subject hint: **${ARGUMENTS:-derive from the diff}**
+Prepare this change for shipping with subject hint
+**${ARGUMENTS:-derive from the diff}**.
 
 Load the `taurus` skill, then read `references/git-discipline.md`,
 `references/conventional-commits.md`, and `references/writing-voice.md`.
@@ -25,10 +26,14 @@ when entries are missing.
 
 ## 2. Confirm green
 
-Run build, full test suite, lint, and type check on this exact tree. Paste the
-output. A red tree does not ship.
+Apply the checks required by the tier in `references/engineering-baseline.md`. A failed
+applicable check does not ship. Confirm the gate report matches this exact tree:
 
-Confirm `references/verification-gate.md` has run for this change. Run `/verify` if it has not.
+```
+python3 ~/.claude/taurus/hooks/gate-report.py validate
+```
+
+Run `/verify` when the report is missing, red, or stale.
 
 ## 3. Branch
 

@@ -20,7 +20,7 @@ def lint(text, *extra):
     return proc.returncode, {f["rule"] for f in findings}, findings
 
 
-class TestBannedPatterns(unittest.TestCase):
+class TestStyleSignals(unittest.TestCase):
     def assertFlags(self, text, rule, *extra):
         code, rules, findings = lint(text, *extra)
         self.assertIn(rule, rules, f"expected {rule} for {text!r}, got {rules}")
@@ -30,35 +30,26 @@ class TestBannedPatterns(unittest.TestCase):
         code, rules, findings = lint(text, *extra)
         self.assertEqual(code, 0, f"expected clean, got {findings}")
 
-    def test_em_dash(self):
-        self.assertFlags("Cache hit rate dropped — the TTL was too short.", "em-dash")
+    def test_one_em_dash_is_a_punctuation_choice(self):
+        _, rules, _ = lint("Cache hit rate dropped — the TTL was too short.")
+        self.assertNotIn("em-dash-density", rules)
 
-    def test_negation_reversal_vietnamese(self):
-        self.assertFlags("Đây không phải lỗi mạng, mà là timeout ở tầng pool.", "negation-reversal-vi")
+    def test_repeated_em_dashes_are_reported(self):
+        self.assertFlags(
+            "The cache missed — Redis had restarted. Requests slowed — every read reached Postgres.",
+            "em-dash-density",
+        )
 
-    def test_negation_reversal_vietnamese_semicolon(self):
-        self.assertFlags("Không phải vấn đề cấu hình; là bug ở retry policy.", "negation-reversal-vi")
+    def test_natural_contrast_is_not_policed(self):
+        _, rules, _ = lint("Không phải cache bị hỏng, mà là consumer đã bỏ sót event cập nhật giá.")
+        self.assertFalse(rules)
 
-    def test_negation_reversal_english(self):
-        self.assertFlags("It's not a network fault, it's a pool timeout.", "negation-reversal-en")
-
-    def test_not_just_but(self):
-        self.assertFlags("This is not just a cache, but a write-through buffer.", "negation-reversal-en")
-
-    def test_not_synonymous_vietnamese(self):
-        self.assertFlags("Idempotency không đồng nghĩa với retry an toàn.", "not-synonymous")
-
-    def test_meta_opener_vietnamese(self):
-        self.assertFlags("Tóm lại, hệ thống chạy ổn định.", "meta-opener")
-
-    def test_meta_opener_english(self):
-        self.assertFlags("In summary, the migration succeeded.", "meta-opener")
+    def test_a_single_summary_transition_is_not_policed(self):
+        _, rules, _ = lint("Nói cách khác, mình cần kiểm tra consumer trước.")
+        self.assertFalse(rules)
 
     def test_filler_opener(self):
         self.assertFlags("Great question! The pool size is 20.", "filler-opener")
-
-    def test_this_is_however(self):
-        self.assertFlags("Điều này là an toàn, tuy nhiên consumer cần xử lý lại.", "this-is-however")
 
     def test_llm_tell(self):
         self.assertFlags("Let's delve into the retry policy.", "llm-tell")
@@ -92,6 +83,12 @@ class TestBannedPatterns(unittest.TestCase):
         )
         self.assertFlags(many, "mini-conclusion")
 
+    def test_choppy_prose_is_reported(self):
+        self.assertFlags(
+            "Pool size hiện là 20. Queue giữ 400 request. p99 đạt 1.8s. Nâng pool lên 60.",
+            "choppy-prose",
+        )
+
 
 class TestCleanProse(unittest.TestCase):
     def assertClean(self, text, *extra):
@@ -124,8 +121,8 @@ class TestSuppression(unittest.TestCase):
         self.assertNotIn("em-dash", rules)
 
     def test_disable_block(self):
-        code, rules, _ = lint("<!-- prose-lint-disable -->\nIt's not X, it's Y.\n<!-- prose-lint-enable -->\n")
-        self.assertNotIn("negation-reversal-en", rules)
+        code, rules, _ = lint("<!-- prose-lint-disable -->\nLet's delve into it.\n<!-- prose-lint-enable -->\n")
+        self.assertNotIn("llm-tell", rules)
 
     def test_disable_line(self):
         code, rules, _ = lint("Bad — line. <!-- prose-lint-disable-line -->\n")
@@ -180,7 +177,7 @@ class TestSourceRepoExemption(unittest.TestCase):
 
 class TestCli(unittest.TestCase):
     def test_exit_code_1_on_error(self):
-        code, _, _ = lint("Tóm lại, xong.")
+        code, _, _ = lint("Generated with Claude Code.")
         self.assertEqual(code, 1)
 
     def test_warn_only_passes_by_default(self):
@@ -193,7 +190,11 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 1)
 
     def test_line_numbers_are_reported(self):
-        _, _, findings = lint("line one\nline two\nbad — line\n")
+        _, _, findings = lint(
+            "The opening sentence contains enough ordinary words.\n"
+            "Another ordinary sentence also contains enough words.\n"
+            "Let's delve into retries.\n"
+        )
         self.assertEqual(findings[0]["line"], 3)
 
     def test_no_input_is_usage_error(self):
@@ -203,11 +204,14 @@ class TestCli(unittest.TestCase):
     def test_reads_files_from_argv(self):
         path = os.path.join(ROOT, "tests", ".tmp-lint-fixture.md")
         with open(path, "w") as fh:
-            fh.write("Tóm lại, đã xong.\n")
+            fh.write("Great question! The pool is full.\n")
         try:
-            proc = subprocess.run([sys.executable, LINT, path], capture_output=True, text=True, timeout=30)
+            proc = subprocess.run(
+                [sys.executable, LINT, "--severity", "warn", path],
+                capture_output=True, text=True, timeout=30,
+            )
             self.assertEqual(proc.returncode, 1)
-            self.assertIn("meta-opener", proc.stdout)
+            self.assertIn("filler-opener", proc.stdout)
         finally:
             os.remove(path)
 

@@ -1,4 +1,4 @@
-> Load when: Run any review, technology choice, architecture decision, or "which approach" question through 2 to 3 independent agents, then synthesize their reports without trusting any of them. Load whenever the task involves reviewing code or a design, comparing options, picking a library or datastore, resolving a disagreement, or deciding anything whose cost of being wrong is more than an hour of work.
+> Load when: A tier 0 review, an explicit `/panel` request, a hard-to-reverse architecture or technology choice, or a material conflict that one reviewer and direct evidence could not settle. Do not load for ordinary tier 1 review or tier 2 work.
 
 # Review panel
 
@@ -12,13 +12,14 @@ Mandatory:
 
 - Any code review of a tier 0 change (payment, inventory, auth, permissions,
   migrations, concurrency, money math).
-- Any architecture or system design decision.
+- An architecture or system design decision whose rollback or replacement cost is high.
 - Choosing a datastore, queue, framework, or library that will be hard to replace.
-- Any decision the user asked you to "review", "compare", "evaluate", or "decide".
-- Any time two sources of guidance conflict.
+- An explicit request for `/panel` or multiple independent opinions.
+- A material conflict that direct evidence or one targeted reviewer did not settle.
 
-Skip the panel for mechanical work with a single correct answer: renaming a symbol,
-fixing a typo, applying a linter fix.
+Use the baseline's single matched reviewer for ordinary tier 1 review. Skip the panel
+for tier 2 work and decisions that are cheap to reverse. Words such as "review",
+"compare", or "decide" do not raise the tier by themselves.
 
 ## Protocol
 
@@ -36,9 +37,9 @@ Constraints: Postgres 15, single region, existing Redis is cache-only
 
 ### Step 2. Brief the panel
 
-Spawn 2 agents for a tier 1 decision, 3 for tier 0 or anything irreversible. Give
-each the same facts and a different mandate. Send them in a single message so they
-run concurrently.
+Spawn 2 agents for an explicitly requested bounded comparison and 3 for tier 0 or an
+irreversible decision. Give each the same facts and a different mandate. Send them in
+a single message so they run concurrently.
 
 Never tell a panelist what the other panelists think, what you think, or which
 option you drafted. Frame the options neutrally: option A and option B, never
@@ -50,7 +51,7 @@ Standard mandates for a code review:
 |---|---|---|
 | 1 | architecture-critic | Boundaries, dependency direction, coupling, whether this belongs here at all |
 | 2 | qa-verifier | Correctness, edge cases, failure paths, test adequacy |
-| 3 | security-auditor or performance-auditor | Whichever risk the change touches |
+| 3 | security-auditor, performance-auditor, algorithm-verifier, reliability-auditor, platform-auditor, frontend-quality-auditor, or ai-ml-verifier | Whichever risk the change touches |
 
 Standard mandates for a design or technology decision:
 

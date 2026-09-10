@@ -24,7 +24,7 @@ if [ -f "$TAURUS_ROOT/hooks/lint-commit.py" ]; then
     python3 "$TAURUS_ROOT/hooks/lint-prose.py" --stdin --profile commit \
         --label commit-message < "$MSG_FILE" || {
         echo "" >&2
-        echo "Commit rejected: the message breaks the writing standard." >&2
+        echo "Commit rejected: the message breaks the publishing policy." >&2
         exit 1
     }
 fi

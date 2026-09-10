@@ -13,7 +13,9 @@ Load the `taurus` skill, then read `references/review-panel.md` and follow the p
 2. **Choose the panel.** Three agents for a tier 0 or irreversible decision, two
    otherwise.
    - Reviewing code: `architecture-critic`, `qa-verifier`, plus `security-auditor`,
-     `performance-auditor`, or `algorithm-verifier` depending on what the change touches.
+     `performance-auditor`, `algorithm-verifier`, or `reliability-auditor` depending
+     on what the change touches. Use `platform-auditor`, `frontend-quality-auditor`,
+     or `ai-ml-verifier` when that is the risk the decision needs to expose.
    - Deciding between options: one `decision-analyst` per option, plus a third
      agent mandated to attack every option and to name the option nobody proposed.
 3. **Brief them identically on facts, differently on mandate.** Never tell a

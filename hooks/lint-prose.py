@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Prose linter for the taurus writing standard.
+"""Review aid for the Taurus writing standard.
 
-Flags the LLM tells the team has banned: em dashes used as connectors,
-negation-reversal constructions, meta-conclusions, stacked hedges, filler
-openers, and AI attribution. Works on Vietnamese and English text.
+Reports high-confidence publishing-policy violations and style signals worth a
+second read. A clean result does not certify that prose sounds natural. Works on
+Vietnamese and English text.
 
 Usage:
     lint-prose.py FILE [FILE ...]
@@ -12,7 +12,7 @@ Usage:
     lint-prose.py --format json FILE
     lint-prose.py --severity warn FILE     # fail on warnings too
 
-Exit codes: 0 clean, 1 findings at or above the failing severity, 2 usage error.
+Exit codes: 0 below the failure threshold, 1 at or above it, 2 usage error.
 
 Suppression:
     <!-- prose-lint-disable -->  ... <!-- prose-lint-enable -->
@@ -54,61 +54,18 @@ RULES: tuple[Rule, ...] = (
         "Remove every Claude/Anthropic mention and the robot emoji.",
     ),
     Rule(
-        "em-dash",
-        ERROR,
-        rx(r"\s—|—\s|—"),
-        "em dash used as a prose connector",
-        "Use a comma, a period, a colon, or parentheses.",
-    ),
-    Rule(
-        "negation-reversal-vi",
-        ERROR,
-        rx(r"kh(ô|o)ng ph(ả|a)i\s+[^.;\n]{0,70}?[,;]\s*(m(à|a)\s+)?l(à|a)\b"),
-        'negation-reversal: "không phải X, mà là Y"',
-        "State Y directly. Drop the X it is being contrasted against.",
-    ),
-    Rule(
-        "negation-reversal-en",
-        ERROR,
-        rx(r"\b(it|this|that|these|they)\s*(?:'s|'re|\s+is|\s+are|\s+was|\s+were)\s+not\s+(just\s+|merely\s+|only\s+)?"
-           r"[^.;\n]{0,70}[,;]\s*(?:(?:it|this|that|these|they)\s*(?:'s|'re|\s+is|\s+are|\s+was|\s+were)|but\s+(?:rather\s+)?|rather\s+)"),
-        'negation-reversal: "it\'s not X, it\'s Y"',
-        "State Y directly.",
-    ),
-    Rule(
-        "not-synonymous",
-        ERROR,
-        rx(r"kh(ô|o)ng (đ|d)(ồ|o)ng nghĩa|kh(ô|o)ng c(ó|o) nghĩa l(à|a)|does not mean\b|doesn'?t mean\b|is not the same as\b"),
-        'pattern "X không đồng nghĩa Y" / "X does not mean Y"',
-        "Say what X actually is.",
-    ),
-    Rule(
-        "meta-opener",
-        ERROR,
-        rx(r"(?m)^\s*(?:[-*+]\s+|>\s*)?(t(ó|o)m l(ạ|a)i|n(ó|o)i c(á|a)ch kh(á|a)c|n(ó|o)i chung|nh(ì|i)n chung l(à|a)|v(ề|e) c(ơ|o) b(ả|a)n th(ì|i)|in summary|in conclusion|to summari[sz]e|to sum up|overall,|ultimately,|in essence)\b"),
-        "meta-commentary opener",
-        "Delete the opener and keep the content.",
-    ),
-    Rule(
         "filler-opener",
-        ERROR,
+        WARN,
         rx(r"(?m)^\s*(great question|excellent question|c(â|a)u h(ỏ|o)i hay|ch(ắ|a)c ch(ắ|a)n r(ồ|o)i|tuy(ệ|e)t v(ờ|o)i|certainly[,!]|absolutely[,!]|of course[,!])"),
-        "filler opener",
-        "Answer without the preamble.",
-    ),
-    Rule(
-        "this-is-however",
-        ERROR,
-        rx(r"(đ|d)i(ề|e)u n(à|a)y (l(à|a)|c(ó|o) nghĩa|cho th(ấ|a)y)[^.\n]{0,80}[,]\s*(song|tuy nhi(ê|e)n|nh(ư|u)ng)\b"),
-        'pattern "Điều này là X, song/tuy nhiên Y"',
-        "Two plain sentences.",
+        "generic warmth may sound performed",
+        "Keep it only when it responds to something specific in the conversation.",
     ),
     Rule(
         "llm-tell",
-        ERROR,
+        WARN,
         rx(r"\b(delve|seamless(ly)?|robust and scalable|it'?s worth noting|it is worth noting|(đ|d)(á|a)ng ch(ú|u) (ý|y) l(à|a)|c(ầ|a)n l(ư|u)u (ý|y) r(ằ|a)ng|d(ễ|e) d(à|a)ng nh(ậ|a)n th(ấ|a)y)\b"),
         "stock LLM phrasing",
-        "Use plain words.",
+        "Name the concrete action or consequence, unless this wording is natural here.",
     ),
     Rule(
         "hedge-stack",
@@ -132,7 +89,7 @@ RULES: tuple[Rule, ...] = (
             re.UNICODE,
         ),
         "emoji in prose",
-        "Remove it unless the reader used emoji first.",
+        "Keep it only when it fits the reader and the context.",
     ),
 )
 
@@ -147,7 +104,8 @@ CONCLUSION_MARKERS = rx(
     r"thus\b|therefore\b|this means\b|this is why\b|which is why\b|in other words\b)"
 )
 
-SENTENCE_SPLIT = re.compile(r"(?<=[.!?:])\s+|\n")
+SENTENCE_SPLIT = re.compile(r"(?<=[.!?:])\s+")
+WORD = re.compile(r"\b[^\W_]+(?:[-'][^\W_]+)*\b", re.UNICODE)
 FENCE = re.compile(r"^\s*(```|~~~)")
 INLINE_CODE = re.compile(r"`[^`]*`")
 URL = re.compile(r"https?://\S+|\b[\w.-]+@[\w.-]+\.\w+")
@@ -271,6 +229,7 @@ def scan(text: str, path: str, profile: str) -> list[Finding]:
                     sentence.strip()[:60],
                 ))
 
+    findings.extend(paragraph_style_signals(masked, path, starts))
     findings.extend(mini_conclusions(masked, path, starts))
     findings.sort(key=lambda f: (f.line, f.col, f.rule))
     return findings
@@ -316,6 +275,47 @@ def mini_conclusions(text: str, path: str, starts: list[int]) -> list[Finding]:
     if len(hits) < 2:
         return []
     return hits
+
+
+def paragraph_style_signals(text: str, path: str, starts: list[int]) -> list[Finding]:
+    """Find repeated punctuation tics and runs of compressed sentences."""
+    findings = []
+    pos = 0
+    for block in text.split("\n\n"):
+        offset = text.find(block, pos)
+        pos = offset + len(block)
+        stripped = block.strip()
+        if not stripped or stripped.startswith(("|", "#", "-", "*", ">", "1.")):
+            continue
+
+        if block.count("—") >= 2:
+            local = block.find("—")
+            ln, col = line_of(offset + local, starts)
+            findings.append(Finding(
+                path, ln, col, "em-dash-density", WARN,
+                "repeated em dashes may have become a writing tic",
+                "Keep useful punctuation, but vary the sentence structure.",
+                stripped[:60],
+            ))
+
+        parts = sentences(block)
+        run = []
+        for sentence, local_offset in parts + [("", -1)]:
+            word_count = len(WORD.findall(sentence))
+            if 2 <= word_count <= 6:
+                run.append((sentence, local_offset))
+                continue
+            if len(run) >= 3:
+                first, first_offset = run[0]
+                ln, col = line_of(offset + first_offset, starts)
+                findings.append(Finding(
+                    path, ln, col, "choppy-prose", WARN,
+                    f"{len(run)} short sentences in a row may sound mechanical",
+                    "Join facts that have a causal, conditional, or contrasting relationship.",
+                    first.strip()[:60],
+                ))
+            run = []
+    return findings
 
 
 FINDING_LIMIT = 50

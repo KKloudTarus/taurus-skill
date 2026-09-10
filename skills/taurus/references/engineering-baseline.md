@@ -1,113 +1,110 @@
-> Load when: The Taurus principal-engineer working standard. Load at the start of any implementation, refactor, bug fix, design, or delivery task, before writing code or a plan. Covers how to interrogate a request, how to sequence the work, what "done" requires, and which specialist skill to pull in next. Triggers on "implement", "build", "fix", "refactor", "add feature", "design", "ship", "deliver", and any task that will produce a commit.
+> Load when: Starting implementation, a bug fix, refactor, technical design, or delivery task. Owns the single authoritative rigor-tier matrix, the amount of discovery and verification each tier requires, escalation rules, work sequences, and tier-specific definitions of done.
 
 # Engineering baseline
 
-How work gets done here. Load this first, then pull the specialist skills it points at.
+Choose the smallest process that protects the user from the actual blast radius. The
+tier is a risk decision, not a measure of diff size: a one-line authorization change
+can be tier 0, while a large documentation edit can remain tier 2.
 
-## 1. Interrogate before you build
+## Understand the work
 
-Never start from the literal request alone. Spend the first minutes on these six
-questions and write the answers down where the user can see them.
+Before editing, answer only the questions that can change the implementation or the
+tier. Keep the answers brief for routine work and make them explicit for tier 0.
 
-1. **What outcome does the user actually need?** Separate the stated solution from
-   the underlying problem. If they asked for a cache and the real problem is an
-   N+1 query, say so before building the cache.
-2. **What breaks if I get this wrong?** Data loss, money, security, availability,
-   or a cosmetic bug. The blast radius sets how much rigor the rest of the task gets.
-3. **What is already in the codebase that does this?** Search before writing.
-   Duplicating an existing abstraction is a defect.
-4. **What are the invariants?** State them as sentences that must stay true.
-   Every later decision gets checked against them.
-5. **What is the workload?** Request rate, data volume, concurrency, latency
-   budget, growth. Numbers, not adjectives. Without them, algorithm and storage
-   choices are guesses.
-6. **What is out of scope?** Name it, so scope creep is visible.
+1. What outcome does the user need beyond the solution they named?
+2. What could break: data, money, security, availability, compatibility, or only presentation?
+3. What code, convention, or tool already handles part of this?
+4. Which invariants must remain true?
+5. What workload or boundary matters: volume, concurrency, latency, size, or rate?
+6. What is outside the requested scope?
 
-If a premise in the request is wrong, say it in one or two sentences, state the
-assumption you will proceed under, and keep building. Do not stop and wait unless
-proceeding either way would be unsafe or would waste the work.
+Do not demand invented workload numbers. If a number would change the design and is
+unknown, record the uncertainty and identify the cheapest measurement that would
+settle it.
 
-## 2. Rigor tiers
+## Rigor tiers
 
-Match effort to blast radius. Do not apply tier 0 ceremony to a copy change, and
-never apply tier 2 casualness to money or auth.
+This table is the source of truth for tier behavior everywhere in the pack.
 
-| Tier | Examples | Required |
+| Tier | Typical risk | Required work |
 |---|---|---|
-| 0 correctness-critical | payment, inventory, auth, permissions, migrations, concurrency, money math | design note + invariant list + tests including concurrency and failure paths + review-panel.md + full verification-gate.md |
-| 1 user-visible behavior | API endpoints, business rules, background jobs, schema additions | tests + verification-gate.md + one reviewer agent |
-| 2 low risk | copy, logging, docs, config defaults, formatting | tests where behavior changes, self-review against the checklist |
+| 0, correctness-critical | Money, authorization, tenant isolation, destructive infrastructure or migrations, inventory, concurrency, irreversible data changes, high-impact ML decisions, autonomous consequential actions | Explicit outcome and invariants; design note; failure and concurrency tests where applicable; full project checks; QA, security, and performance reviewers; every specialist required by the risk domains; 2–3 agent review panel; current gate artifact |
+| 1, user-visible behavior | API or UI behavior, business rules, jobs, non-destructive infrastructure or schema additions, request-path changes, bounded model or prompt changes | Acceptance criteria; short design note when a real choice exists; behavior or evaluation tests; relevant project checks; one reviewer matched to the primary risk plus a specialist for any secondary domain that requires one; current gate artifact |
+| 2, low risk | Docs, copy, formatting, local cleanup, diagnostic logging, safe config defaults | Focused validation for the changed surface; self-review; current gate artifact; no reviewer or panel unless risk emerges |
 
-State which tier you picked and why, in one line.
+State the tier and its concrete reason in one sentence. Escalate immediately when the
+work reveals a higher-risk invariant, a hard-to-reverse decision, cross-service state,
+or uncertainty that cannot be bounded. Never lower a tier to save agent calls.
 
-## 3. Work sequence
+## Choose the reviewer
 
-```
-interrogate -> design note (tier 0/1) -> tests -> implementation -> self-review
-  -> verification-gate -> review-panel (tier 0, or any decision) -> commit -> PR
-```
+Tier 1 uses one reviewer by default:
 
-The design note for tier 0 and 1 is short: problem, invariants, chosen approach,
-two rejected alternatives with the reason, failure modes, rollback. Ten to thirty
-lines. Put it in the PR body, or in docs/adr/ when the decision outlives the PR.
-
-## 4. Non-negotiables
-
-- **Tests ship with the change.** A behavior change without a test is incomplete
-  work. See test-discipline.md.
-- **Dependency direction holds.** infrastructure -> adapters -> application -> domain.
-  See clean-architecture.md.
-- **Complexity is stated.** Any loop over a collection that can grow, any new index,
-  any new query gets its complexity and its expected row count written down.
-  See algorithm-rigor.md.
-- **Errors are handled at the layer that can decide.** No swallowed exceptions, no
-  catch {}, no error returned as nil.
-- **Concurrency is explicit.** Name the shared state, name the lock or the channel
-  or the transaction that protects it. Unbounded goroutines, threads, or promises
-  are defects.
-- **Nothing is reported done without running it.** Build, tests, and the actual
-  code path. Paste failing output rather than describing it.
-- **No new dependency without justification.** Size, maintenance status, license,
-  and what it replaces. A 40-line utility beats a transitive tree.
-- **Secrets never enter code, logs, tests, or fixtures.**
-
-## 5. Code standards
-
-- Names say what the thing is in the domain, not what type it is. seatHold, not
-  dataObj. No abbreviations that the domain does not already use.
-- Functions do one thing at one level of abstraction. If you cannot name it without
-  "and", split it.
-- Comments explain why, never what. A comment restating the code is deleted.
-- Public API surface is minimal. Export what callers need, nothing else.
-- No dead code, no commented-out code, no TODO without an owner and a ticket.
-- Formatting and linting come from the project's own tooling. Run it, do not
-  hand-format.
-- Match the surrounding code's idiom. A file that uses one style does not get a
-  second style introduced.
-
-## 6. Definition of done
-
-All of these, every time:
-
-- [ ] The stated problem is solved, and the acceptance criteria are written down.
-- [ ] Tests cover the happy path, the boundaries, the failure paths, and the
-      concurrency behavior when concurrency exists.
-- [ ] Build passes. Full test suite passes. Linter passes. Type checker passes.
-- [ ] verification-gate.md ran: QA, security, and performance all reported.
-- [ ] Every finding is fixed, or listed with a reason for deferring.
-- [ ] The diff contains only what the task needs.
-- [ ] Commit and PR follow git-discipline.md.
-- [ ] Prose follows writing-voice.md.
-
-## 7. Which skill next
-
-| Situation | Skill |
+| Primary risk | Reviewer |
 |---|---|
-| Writing any prose, commit, PR, doc | writing-voice.md |
-| Committing, branching, opening a PR | git-discipline.md |
-| Placing code in layers, defining ports | clean-architecture.md |
-| Deciding what and how to test | test-discipline.md |
-| Choosing a data structure, algorithm, index, or pattern | algorithm-rigor.md |
-| Designing a service, API, schema, or async flow | system-design.md |
-| Before declaring done | verification-gate.md |
-| Any review, technology choice, or architecture decision | review-panel.md |
+| Behavior, edge cases, tests | `qa-verifier` |
+| Authentication, input, secrets, tenant data | `security-auditor` |
+| Latency, allocations, queries, load | `performance-auditor` |
+| Boundaries, coupling, dependency direction | `architecture-critic` |
+| Algorithm, data structure, concurrency correctness | `algorithm-verifier` |
+| Database safety, migration, recovery, operability | `reliability-auditor` |
+| SLO, alerts, observability, capacity, incident readiness | `reliability-auditor` |
+| Terraform, OpenTofu, Pulumi, Kubernetes, CI/CD, cloud IAM | `platform-auditor` |
+| Browser behavior, accessibility, frontend experience | `frontend-quality-auditor` |
+| Data, features, models, ML evaluation, LLM, RAG, agent safety | `ai-ml-verifier` |
+
+A change with two independent high-impact risks belongs in tier 0 or needs a second
+reviewer. A mechanical tier 2 change does not gain quality from a ceremonial agent run.
+
+## Work sequence
+
+Tier 0:
+
+```
+inspect -> invariants -> design -> design panel -> tests -> implement -> self-review
+  -> full checks -> full verification gate -> final panel -> gate artifact
+```
+
+Tier 1:
+
+```
+inspect -> acceptance criteria -> design when needed -> tests -> implement
+  -> self-review -> relevant checks -> targeted reviewer -> gate artifact
+```
+
+Tier 2:
+
+```
+inspect -> edit -> focused validation -> self-review -> gate artifact
+```
+
+Tests precede implementation when behavior changes and a failing test can express the
+defect. Documentation, formatting, and equivalent non-behavioral work do not need a
+manufactured red-test phase.
+
+## Engineering constraints
+
+- A behavior change ships with a regression test at the narrowest useful layer.
+- Domain policy does not depend on framework, transport, database, or SDK types.
+- Shared mutable state names its protection mechanism. Work creation and retries are bounded.
+- Errors remain errors until a layer can make a recovery, retry, or user-facing decision.
+- Complexity and performance claims name the input that grows and the evidence available.
+- A new dependency has a concrete benefit, maintenance state, license, and exit cost.
+- Secrets and sensitive user data stay out of code, fixtures, logs, and reports.
+- Infrastructure source changes do not authorize apply, destroy, state mutation, model
+  promotion, paid evaluation, or another external action.
+- Match the surrounding repository unless doing so would preserve a demonstrated defect.
+
+## Definition of done
+
+Every tier must satisfy these outcomes:
+
+- The requested outcome is present and the diff stays within scope.
+- Verification matches the chosen tier and the actual project capabilities.
+- Every reported command, measurement, and reviewer result came from a real run.
+- No finding remains open. Deferred or rejected findings include a reason.
+- `.git/taurus/verification.json` validates against the current worktree fingerprint.
+
+Tier 0 additionally requires the full reviewer set and panel. Tier 1 requires the
+matched reviewer. Tier 2 requires focused checks and self-review, with no implied
+three-agent gate. Git and PR requirements apply only when the user asks to ship.

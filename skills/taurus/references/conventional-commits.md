@@ -62,9 +62,10 @@ feat(inventory): hold seats under a row-level lock
 fix(internal/order): release the hold when payment times out
 ```
 
-Allowed characters: lowercase letters, digits, `.`, `_`, `/`, `-`. No spaces, no empty
-parentheses. Pick scope names from the repo's own vocabulary (a bounded context, a
-package, a service) and keep them stable, since scopes end up as changelog sections.
+Allowed characters are lowercase letters, digits, `.`, `_`, `/`, and `-`; spaces and
+empty parentheses are invalid. Pick scope names from the repo's own vocabulary (a
+bounded context, a package, or a service) and keep them stable, since scopes end up as
+changelog sections.
 
 Omit the scope when the change spans the whole repo.
 

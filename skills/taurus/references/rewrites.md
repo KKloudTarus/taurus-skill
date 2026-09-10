@@ -1,91 +1,112 @@
-> Load when: a draft was flagged by the writing standard and the fix is not obvious, or when rewriting a chat reply, review comment, commit message, PR body, design doc, code comment, or incident note.
+> Load when: A draft feels stiff, generic, over-polished, too compressed, or disconnected from the reader, or when a prose-linter warning needs contextual judgment. Provides rewrites for chat, reviews, commits, PRs, design docs, comments, and incident notes.
 
 # Rewrite catalogue
 
-Before and after, drawn from real review comments, PR bodies, and design docs.
-Load when a draft is flagged and the fix is not obvious.
+Use these examples to recover a natural voice, not as templates to copy word for
+word. Keep the facts and adjust the tone to the reader and the artifact.
 
 <!-- prose-lint-disable -->
 
 ## Chat replies
 
-Before: Great question! Điều này là một vấn đề thú vị. Về cơ bản, connection pool có thể đang bị đầy — điều này dẫn tới việc request bị treo. Tóm lại, bạn nên tăng pool size.
+Stiff: Pool size hiện là 20. Queue giữ 400 request. p99 đạt 1.8s. Nâng pool lên 60.
 
-After: Pool đang giới hạn ở 20 connection. Ở peak có 400 request chờ, nên p99 chạm 1.8s. Nâng lên 60 giữ p99 dưới 300ms trong benchmark ở tests/load/pool_test.go.
+Natural: Ừ, khả năng cao là pool đang nghẽn. Giới hạn hiện tại là 20 connection,
+trong khi giờ cao điểm có khoảng 400 request chờ và p99 lên tới 1.8 giây. Benchmark
+với 60 connection đưa p99 xuống dưới 300 ms, nhưng nên kiểm tra database headroom
+trước khi đổi để tránh đẩy bottleneck sang chỗ khác.
 
-What changed: the filler opener, the meta sentence, the hedge stack, the em dash,
-and the closing summary all went. The numbers and the file path came in.
+Why it works: the reply answers early, connects the evidence, and leaves the reader
+with a sensible next check. The acknowledgement responds to the situation instead of
+praising the question.
 
 ## Review comments
 
-Before: This is not just a style issue, it's a correctness issue. It might potentially cause problems under load.
+Stiff: This is not just a style issue, it's a correctness issue. It might potentially
+cause problems under load.
 
-After: Two requests can both pass the availability check before either writes. Add SELECT FOR UPDATE on seat_hold, or a unique constraint on (occurrence_id, seat_id) where state = 'HELD'.
+Natural: Chỗ này có race condition. Hai request có thể cùng vượt qua availability
+check trước khi request nào kịp ghi. Dùng `SELECT FOR UPDATE` trên `seat_hold`, hoặc
+thêm unique constraint cho seat đang ở trạng thái `HELD`.
 
-Before: Đây là một thiết kế tốt, tuy nhiên có lẽ nên xem xét lại việc sử dụng cache ở đây.
+Stiff: Cache ở dòng 88 có TTL 5 phút. User thấy giá cũ. Invalidate cache.
 
-After: Cache ở dòng 88 giữ TTL 5 phút nhưng giá đổi ngay khi organizer sửa price book. User thấy giá cũ tới 5 phút. Invalidate theo event PriceBookUpdated, hoặc bỏ cache ở path này.
+Natural: Cache ở dòng 88 giữ giá trong 5 phút, nên user vẫn có thể thấy giá cũ sau
+khi organizer sửa price book. Nếu giữ cache này, hãy invalidate khi nhận
+`PriceBookUpdated`; nếu browse path chưa cần cache, bỏ nó sẽ đơn giản hơn.
 
 ## Commit messages
 
-Before: fix: fixed some issues with the payment flow — this makes it more robust
+Stiff: `fix: improve payment reliability`
 
-After:
+Natural:
 
 ```
-fix(payment): reject a webhook whose signature timestamp is over 5 minutes old
+fix(payment): reject stale webhook signatures
 
-A replayed capture webhook re-ran the fulfilment path and issued a second
-ticket. The handler now checks the timestamp against a 5-minute window and
-records the event id before doing any work.
+A replayed capture webhook could enter the fulfilment path twice. The handler now
+rejects signatures older than five minutes and records the event id before doing
+any work.
 
 Refs: PLAT-901
 ```
 
 ## PR descriptions
 
-Before: ## Summary\nThis PR implements a comprehensive and robust solution for seat holding. It's not just a fix — it's a rethinking of how we handle inventory. Overall, this should significantly improve reliability.
+Stiff: This PR implements a comprehensive solution that makes seat holding robust
+and scalable.
 
-After:
+Natural:
 
 ```markdown
 ## Problem
-Two checkouts on different pods could both win the same seat. Redis held the
-hold state, so the availability check and the write were not atomic. Reproduced
-in tests/inventory/contention_test.go: 12 double-sells out of 200 attempts.
+
+Two checkouts on different pods could reserve the same seat. The availability check
+ran against Redis, while the final write happened in Postgres, so the two operations
+were not atomic. The contention test reproduced 12 double reservations in 200 runs.
 
 ## Approach
-The hold now writes to inventory.seat_hold inside the transaction that checks
-availability, under SELECT FOR UPDATE on the seat rows. Redis keeps the
-availability projection for the browse path only.
+
+Seat holds now write to `inventory.seat_hold` in the same transaction that checks
+availability, under a row lock on the selected seats. Redis remains a projection for
+the browse path and no longer decides whether a hold succeeds.
 ```
 
 ## Design docs
 
-Before: Việc đảm bảo tính nhất quán của quá trình xử lý thanh toán là một yêu cầu quan trọng. Điều này đòi hỏi khả năng xử lý idempotency ở nhiều tầng khác nhau. Do đó, chúng ta cần một giải pháp toàn diện.
+Stiff: Payment consistency is critical. Idempotency is required at multiple layers.
+Therefore, a comprehensive solution is needed.
 
-After: Một payment intent chỉ được charge đúng một lần, kể cả khi client retry hoặc PSP gửi webhook trùng. Payment service ghi idempotency state vào Postgres trong cùng transaction với charge. Gateway cache key ở Redis chỉ để chặn sớm, không phải nguồn sự thật.
+Natural: A payment intent may be retried by both the client and the PSP, but it may
+only be charged once. Payment service stores the idempotency record in Postgres in
+the same transaction as the state change. Redis can reject obvious duplicates early;
+it is not the source of truth.
 
 ## Code comments
 
-Before: // This function processes the order on func processOrder(...).
+Stiff: `// We use a mutex here for safety.`
 
-After: delete it.
+Natural: `// seatCache is read by the SSE broadcaster and written by the Kafka consumer.`
 
-Before: // We use a mutex here for safety
-
-After: // seatCache is read by the SSE broadcaster and written by the Kafka consumer.
+Delete a comment that only translates the next line into English.
 
 ## Incident notes
 
-Before: Có thể do database bị chậm, dẫn đến việc timeout. Nhìn chung hệ thống đã ổn định trở lại.
+Conversational: Có vẻ database hơi chậm nên checkout timeout. Bây giờ hệ thống đã ổn.
 
-After: Từ 14:02 tới 14:19, checkout p99 lên 9s. Nguyên nhân: migration ALTER TABLE orders khoá bảng 17 phút. 340 checkout timeout, 0 double-charge. Rollback lúc 14:19.
+Operational: Từ 14:02 tới 14:19, checkout p99 tăng lên 9 giây. Migration
+`ALTER TABLE orders` giữ table lock trong 17 phút, làm 340 checkout timeout; không có
+double charge. Rollback hoàn tất lúc 14:19, và p99 trở lại 280 ms lúc 14:22.
+
+Incident notes should stay dry because readers need an exact timeline. Natural voice
+does not require every artifact to sound casual.
 
 <!-- prose-lint-enable -->
 
-## The three questions for any draft
+## Four questions for a draft
 
-1. Which sentence carries the fact the reader needs? Put it first.
-2. Which sentences would the reader still understand the draft without? Cut them.
-3. Which claim has no number, no file, and no test behind it? Get one, or drop the claim.
+1. Does this sound like a response to this reader, or could it appear unchanged in
+   any conversation?
+2. Are related facts connected, or did compression turn them into fragments?
+3. Does every number and certainty level come from evidence?
+4. Would the reader know what to do next without a ceremonial closing paragraph?

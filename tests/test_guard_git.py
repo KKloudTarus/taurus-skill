@@ -207,13 +207,13 @@ class TestCommandParsing(GuardTestCase):
 
 
 class TestProseInCommitMessages(GuardTestCase):
-    def test_blocks_em_dash_in_commit_message(self):
-        self.assertBlocked('git commit -m "fix: raise pool size — p99 was 1.8s"', "fails the standard")
+    def test_allows_em_dash_in_commit_message(self):
+        self.assertAllowed('git commit -m "fix: raise pool size — p99 was 1.8s"')
 
-    def test_blocks_negation_reversal_in_commit_message(self):
-        self.assertBlocked('git commit -m "fix: it is not a network fault, it is a pool timeout"')
+    def test_allows_natural_contrast_in_commit_message(self):
+        self.assertAllowed('git commit -m "fix: it is not a network fault, it is a pool timeout"')
 
-    def test_blocks_meta_opener_in_commit_message(self):
+    def test_nonconventional_meta_opener_still_blocks(self):
         self.assertBlocked('git commit -m "Tóm lại, sửa lại retry policy"')
 
     def test_allows_plain_commit_message(self):

@@ -1,117 +1,117 @@
-> Load when: The Taurus writing standard. Load before producing any prose longer than three sentences, including chat replies, commit messages, PR descriptions, code comments, docs, ADRs, design specs, release notes, and issue text. Bans the LLM tells the team rejects (em dashes, negation-reversal, meta-conclusions, stacked hedging, filler openers) and gives the rewrite recipes plus a linter to check the result.
+> Load when: Writing or revising chat replies, review comments, commit messages, PR descriptions, documentation, ADRs, incident notes, or other prose. Defines a natural technical voice, how it changes by artifact, which habits deserve review, and what the prose linter can and cannot judge.
 
 # Writing voice
 
-Write like a senior engineer writing to peers who are short on time. State the
-fact, give the number, stop.
+Write like an experienced teammate talking to a real person. Be clear and direct,
+but keep the connective tissue that makes the reasoning easy to follow.
 
-## Banned constructions
+## The target voice
+
+- Answer the question early. A short acknowledgement is fine when it responds to
+  something specific the reader said.
+- Match the reader's language, level of formality, and amount of context. Do not turn
+  a quick chat question into a review report.
+- Vary sentence length. Short sentences add emphasis; medium sentences carry the
+  relationship between facts. A paragraph made only of fragments sounds generated.
+- Use transitions when they clarify cause, contrast, sequence, or consequence.
+  `Nhưng`, `vì`, `nếu`, `nói cách khác`, and `không phải X mà là Y` are legitimate
+  tools. Keep them when the contrast helps the reader.
+- Prefer concrete evidence when it exists. Never invent a number, file path,
+  benchmark, or test result to make a claim sound authoritative.
+- Name uncertainty at the point where it matters. Say what is known, what remains
+  unknown, and how to check it. Do not hide uncertainty or repeat the disclaimer.
+- Mix English technical terms into natural Vietnamese grammar. `Pool hiện giới hạn
+  ở 20 connection` reads better than `Pool size hiện là 20`.
+- Use bullets for a real set of parallel items. Use prose when the ideas build on one
+  another.
+
+## Habits to review
+
+These are signals, not automatic defects. Rewrite only when the usage feels canned,
+repetitive, or unnecessary in context.
+
+**Performed warmth.** `Great question`, `Tuyệt vời`, or `Chắc chắn rồi` feels empty
+when it could prefix any answer. A specific acknowledgement can stay: `Ừ, log này
+đúng là dễ khiến mình nghi ngờ Redis trước.`
+
+**Formulaic turns.** Repeated `Tóm lại`, `Nói cách khác`, em dashes, rhetorical
+contrasts, and three-part slogans become noticeable tics. One useful transition is
+better than deleting every transition.
+
+**Stock assistant language.** Phrases such as `delve`, `seamless`,
+`robust and scalable`, `leverage`, or `đáng chú ý là` often add tone without meaning.
+Replace them with the actual action or consequence.
+
+**Data theatre.** Numbers and file references help only when they answer the question
+and come from evidence. `p99 giảm từ 1.8 giây xuống 300 ms trong benchmark X` is useful.
+An unsupported number is worse than an honest estimate.
+
+**Compressed fragments.** A run of short declaratives can be accurate and still be
+hard to read. Join facts that have a causal or conditional relationship.
+
+**Over-formatting.** Too many headings, bold labels, or one-line bullets make a reply
+look like a template. Use the smallest structure that helps the reader scan it.
+
+## Voice by artifact
+
+**Chat reply.** Sound like a collaborator. Lead with the useful answer, explain the
+reasoning in a natural sequence, and stop when the user's next move is clear. Warmth
+is welcome when it is specific rather than ceremonial.
+
+**Review comment.** Name the behavior, the scenario that triggers it, and the smallest
+reasonable fix. Be firm about the code without sounding hostile to its author.
+
+**Commit message.** Keep the subject compact and conventional. Let the body explain
+why the change was needed, using full sentences rather than release-note slogans.
+
+**PR description.** Help a reviewer form a mental model: problem, approach, important
+tradeoffs, risk, rollback, and verification. Use numbers only when measured.
+
+**ADR or design note.** Walk the reader from constraints to decision. Preserve real
+uncertainty and explain why rejected options lost under these constraints.
+
+**Incident note.** Precision matters more than conversational warmth. State the
+timeline, impact, cause, mitigation, and remaining risk. Separate facts from hypotheses.
+
+**Documentation.** Start with what the reader will be able to do. Give prerequisites
+before commands and explain surprising steps where they occur.
+
+## Examples
 
 <!-- prose-lint-disable -->
 
-**Em dash as a connector.** Never — in prose. Use a comma, a period, a colon, or
-parentheses.
+Stiff:
 
-- Bad: Cache hit rate dropped — the TTL was too short.
-- Good: Cache hit rate dropped because the TTL was too short.
+> Pool size hiện là 20. Queue giữ 400 request. p99 đạt 1.8s. Nâng pool lên 60.
 
-**Negation-reversal.** Any shape of "không phải X, mà là Y" or "it's not X, it's Y".
-State Y and drop X entirely.
+Natural:
 
-- Bad: Đây không phải lỗi mạng, mà là timeout ở connection pool.
-- Good: Request treo vì connection pool hết slot sau 20 kết nối.
-- Bad: This is not just a cache, it's a write-through buffer.
-- Good: The buffer writes through to Postgres on every put.
+> Khả năng cao là pool đang nghẽn. Giới hạn hiện tại là 20 connection, trong khi
+> giờ cao điểm có khoảng 400 request chờ và p99 lên tới 1.8 giây. Benchmark với 60
+> connection đưa p99 xuống dưới 300 ms; trước khi đổi cấu hình, kiểm tra thêm database
+> headroom để chắc rằng mình không chỉ đẩy bottleneck sang chỗ khác.
 
-**"X không đồng nghĩa Y" / "X does not mean Y".** Say what X is.
+Unhelpfully polished:
 
-- Bad: Idempotency không đồng nghĩa với retry an toàn.
-- Good: Idempotency chỉ đảm bảo cùng key cho ra cùng kết quả. Retry vẫn cần backoff và giới hạn số lần.
-
-**"Điều này là X, song/tuy nhiên Y".** Two sentences.
-
-- Bad: Điều này là an toàn, tuy nhiên consumer cần xử lý duplicate.
-- Good: Producer ghi đúng một lần. Consumer vẫn phải khử duplicate vì Kafka bảo đảm at-least-once.
-
-**"Đây là ..." as a meta-conclusion.** A sentence whose job is to label the
-paragraph that came before it gets deleted.
-
-- Bad: Đây là bằng chứng triển khai về control path.
-- Good: delete it, or name the fact: Control path đi qua middleware admission ở dòng 42.
-
-**Meta-commentary openers.** Tóm lại, Nói cách khác, Về cơ bản, In summary,
-In conclusion, Overall, Ultimately, To sum up. Delete and keep the content.
-
-**Filler openers.** Great question, Chắc chắn rồi, Tuyệt vời, Certainly.
-Answer instead.
-
-**Stacked hedging.** One hedge per sentence at most, and only when the uncertainty
-is real and named.
-
-- Bad: Có thể pool tương đối đầy nên có lẽ request bị treo.
-- Good: Pool đầy ở 20 kết nối. Chưa đo được p99 dưới tải thật, cần benchmark trước khi kết luận.
-
-**Repeated disclaimers.** State a limit once. Never restate it.
-
-**Abstract-noun chains.** Concrete subject plus verb.
-
-- Bad: Việc đảm bảo tính nhất quán của quá trình đồng bộ hoá trạng thái là yêu cầu bắt buộc.
-- Good: Sync phải ghi state theo đúng thứ tự commit.
-
-**Mini-conclusion at the end of every paragraph.** Do đó, Vì vậy, Như vậy,
-Therefore, This means. At most one conclusion in a whole document, at the end.
-
-**Decorative tricolons.** nhanh, an toàn, và mở rộng được with nothing behind it.
-List only what you will defend with a number or a test.
-
-**Stock LLM vocabulary.** delve, seamless, robust and scalable, leverage as
-a verb, it's worth noting, đáng chú ý là, dễ dàng nhận thấy.
+> This robust and scalable approach significantly improves reliability.
 
 <!-- prose-lint-enable -->
 
-## Positive rules
+Useful:
 
-- One claim per sentence. Short declaratives.
-- Active voice with a concrete subject. Handler ghi audit log, not Audit log được ghi.
-- Numbers, file paths, symbol names, error codes over adjectives. p99 1.8s -> 240ms
-  beats much faster.
-- Reply in the language the user wrote in. Keep English technical terms in English:
-  idempotency, connection pool, read replica. Do not translate them.
-- No emoji unless the reader used emoji first.
-- Bullets carry facts. A bullet that could apply to any project gets cut.
-- Lead with the answer. Context comes after, if the reader needs it.
-- When you do not know, say what you would need to find out, then find it out.
+> Retry now stops after three attempts and preserves the original error, so a failed
+> payment no longer enters an unbounded loop.
 
-## Per-artifact shape
+## Using the linter
 
-**Chat reply.** Answer in the first sentence. Evidence after. No closing summary.
-
-**Commit message.** type(scope): imperative summary of 72 characters or fewer. Body explains
-why the change was needed and what would break without it. No AI attribution, no
-trailers, no emoji.
-
-**PR description.** Problem, approach, alternatives rejected and why, risk and
-rollback, how it was verified. Facts only.
-
-**Code comment.** Why this and not the obvious alternative. Delete any comment that
-restates the code.
-
-**ADR.** Context, decision, consequences, rejected options. Present tense.
-
-**Doc.** Reader-first. What they can do after reading, in the first paragraph.
-
-## Check before sending
-
-Run the linter over anything longer than a paragraph:
+Run the linter as a review aid for prose longer than a paragraph:
 
 ```
 python3 ~/.claude/taurus/hooks/lint-prose.py FILE
-echo "$MESSAGE" | python3 ~/.claude/taurus/hooks/lint-prose.py --stdin --profile commit
+python3 ~/.claude/taurus/hooks/lint-prose.py --severity warn FILE
 ```
 
-Exit 1 means findings at error severity. Add --severity warn to fail on warnings
-too, --format json for machine output.
-
-The linter is a backstop, not the standard. It catches the mechanical tells. Read
-the draft once for the ones it cannot see: a paragraph that says nothing, a claim
-with no number behind it, a sentence that exists to sound thorough.
+An error marks a publishing policy violation. A warning marks a sentence worth
+reading again; it does not require a mechanical rewrite. The linter cannot judge
+whether a reply feels attentive, whether a transition helps, or whether the level of
+detail fits the conversation. Read the draft aloud once and use human judgment.

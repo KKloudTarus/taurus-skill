@@ -7,7 +7,7 @@ the machine, so a change here is a change to how every session behaves.
 ## Commands
 
 ```bash
-./run-tests.sh              # all six suites, run before every commit
+./run-tests.sh              # all seven suites, run before every commit
 ./install.sh --dry-run      # show what an install would change
 python3 hooks/lint-prose.py <files>
 ```
@@ -32,9 +32,9 @@ bash tests/test_install.sh
   rules still apply here, and the prose linter never takes the exemption on the
   `commit` profile.
 - `hooks/lint-prose.py` owns the prose pattern definitions and
-  `hooks/lint-commit.py` owns the Conventional Commits grammar.
-  `hooks/guard-git.py` shells out to both for commit messages. Add a pattern or a
-  grammar rule in one place only.
+  `hooks/lint-commit.py` owns the Conventional Commits grammar. The verification
+  schema belongs to `hooks/gate-report.py`. `hooks/guard-git.py` shells out to both
+  linters for commit messages. Add each rule in its owning tool only.
 - `hooks/guard-git.py` never guesses at shell quoting. `hooks/shellscan.py` is the
   lexer; ask it whether a span is code or data. Regex-over-raw-text produced both
   false blocks and real bypasses, twice.
@@ -54,7 +54,7 @@ bash tests/test_install.sh
 - Anything in `install.sh` that writes global git config needs an opt-out flag, and
   `tests/test_install.sh` must pass it. `CLAUDE_CONFIG_DIR` does not isolate git.
 - Every markdown file in the pack is linted by `tests/test_repo_integrity.py`
-  against the standard the pack ships. Wrap banned examples in
+  against the standard the pack ships. Wrap examples that intentionally trigger a rule in
   `<!-- prose-lint-disable -->` and `<!-- prose-lint-enable -->` rather than
   weakening a rule.
 - The pack ships exactly one skill, `skills/taurus`, because every directory under

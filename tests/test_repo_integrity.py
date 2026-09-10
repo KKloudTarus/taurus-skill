@@ -54,7 +54,27 @@ class TestSkills(unittest.TestCase):
         self.assertEqual(len(skills()), 1, [os.path.dirname(p) for p in skills()])
 
     def test_references_carry_the_depth(self):
-        self.assertGreaterEqual(len(references()), 10)
+        expected = {
+            "algorithm-rigor.md",
+            "checklists.md",
+            "clean-architecture.md",
+            "conventional-commits.md",
+            "engineering-baseline.md",
+            "frontend-quality.md",
+            "genai-agent-systems.md",
+            "git-discipline.md",
+            "infrastructure-delivery.md",
+            "ml-engineering.md",
+            "review-panel.md",
+            "rewrites.md",
+            "sre-operations.md",
+            "system-design.md",
+            "test-discipline.md",
+            "verification-gate.md",
+            "writing-voice.md",
+        }
+        found = {os.path.basename(path) for path in references()}
+        self.assertEqual(found, expected)
 
     def test_every_skill_dir_has_a_skill_md(self):
         for d in sorted(glob.glob(os.path.join(ROOT, "skills", "*"))):
@@ -87,6 +107,24 @@ class TestSkills(unittest.TestCase):
         for path in skills() + references():
             _, body = frontmatter(path)
             self.assertGreater(len(body.split()), 250, f"{path}: body too thin")
+
+    def test_always_loaded_context_stays_small(self):
+        path = os.path.join(ROOT, "rules", "always-on.md")
+        with open(path, encoding="utf-8") as fh:
+            words = fh.read().split()
+        self.assertLessEqual(
+            len(words), 350,
+            f"always-on.md has {len(words)} words; move conditional detail into the skill",
+        )
+
+    def test_skill_router_stays_small(self):
+        for path in skills():
+            with open(path, encoding="utf-8") as fh:
+                words = fh.read().split()
+            self.assertLessEqual(
+                len(words), 700,
+                f"{path} has {len(words)} words; move conditional detail into references",
+            )
 
     def test_cross_references_resolve(self):
         names = {os.path.basename(os.path.dirname(p)) for p in skills()}
@@ -132,7 +170,20 @@ class TestSkills(unittest.TestCase):
 
 class TestAgents(unittest.TestCase):
     def test_agents_exist(self):
-        self.assertGreaterEqual(len(agents()), 5)
+        expected = {
+            "ai-ml-verifier",
+            "algorithm-verifier",
+            "architecture-critic",
+            "decision-analyst",
+            "frontend-quality-auditor",
+            "performance-auditor",
+            "platform-auditor",
+            "qa-verifier",
+            "reliability-auditor",
+            "security-auditor",
+        }
+        found = {os.path.basename(path)[:-3] for path in agents()}
+        self.assertEqual(found, expected)
 
     def test_frontmatter_name_matches_filename(self):
         for path in agents():
@@ -180,7 +231,7 @@ class TestCommands(unittest.TestCase):
 class TestExecutables(unittest.TestCase):
     def test_scripts_are_executable(self):
         for rel in ("install.sh", "hooks/guard-git.py", "hooks/lint-prose.py",
-                    "hooks/lint-commit.py", "githooks/commit-msg",
+                    "hooks/lint-commit.py", "hooks/gate-report.py", "githooks/commit-msg",
                     "githooks/pre-commit", "githooks/pre-push"):
             path = os.path.join(ROOT, rel)
             self.assertTrue(os.access(path, os.X_OK), f"{rel} is not executable")
