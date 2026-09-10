@@ -1,0 +1,15 @@
+#!/bin/sh
+# Taurus delivery standard: passthrough.
+#
+# core.hooksPath replaces the repository's hook directory outright, so a hook name
+# this pack does not provide would stop running everywhere. This script enforces
+# nothing and exists only to hand control back to the repository's own hook.
+#
+# stdin is left untouched, so hooks that read it get what git sent.
+
+GIT_DIR_PATH="$(git rev-parse --git-dir 2>/dev/null || true)"
+REPO_HOOK="${GIT_DIR_PATH:+$GIT_DIR_PATH/hooks/prepare-commit-msg}"
+if [ -n "$REPO_HOOK" ] && [ -x "$REPO_HOOK" ] && [ "$REPO_HOOK" != "$0" ]; then
+    exec "$REPO_HOOK" "$@"
+fi
+exit 0

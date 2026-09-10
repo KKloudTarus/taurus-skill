@@ -1,0 +1,37 @@
+#!/bin/sh
+# Taurus delivery standard: validate the final commit message.
+#
+# This is the control of record for message rules. git has already assembled the
+# message by the time this runs, so no option spelling, alias, heredoc, or shell
+# expansion can route around it. The PreToolUse guard is the fast layer in front.
+#
+# Installed by taurus-skill/install.sh via core.hooksPath. A repo's own
+# .git/hooks/commit-msg still runs, after this one.
+
+set -e
+
+TAURUS_ROOT="${TAURUS_ROOT:-$HOME/.claude/taurus}"
+MSG_FILE="$1"
+
+if [ -f "$TAURUS_ROOT/hooks/lint-commit.py" ]; then
+    python3 "$TAURUS_ROOT/hooks/lint-commit.py" "$MSG_FILE" || {
+        echo "" >&2
+        echo "Commit rejected: the message does not follow Conventional Commits 1.0.0." >&2
+        echo "Format: <type>[(scope)][!]: <description>, blank line, body, blank line, footers." >&2
+        echo "See https://www.conventionalcommits.org/en/v1.0.0/" >&2
+        exit 1
+    }
+    python3 "$TAURUS_ROOT/hooks/lint-prose.py" --stdin --profile commit \
+        --label commit-message < "$MSG_FILE" || {
+        echo "" >&2
+        echo "Commit rejected: the message breaks the writing standard." >&2
+        exit 1
+    }
+fi
+
+# Chain to the repository's own hook, if it has one.
+GIT_DIR_PATH="$(git rev-parse --git-dir 2>/dev/null || true)"
+REPO_HOOK="${GIT_DIR_PATH:+$GIT_DIR_PATH/hooks/commit-msg}"
+if [ -n "$REPO_HOOK" ] && [ -x "$REPO_HOOK" ] && [ "$REPO_HOOK" != "$0" ]; then
+    exec "$REPO_HOOK" "$@"
+fi

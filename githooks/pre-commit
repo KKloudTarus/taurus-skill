@@ -1,0 +1,33 @@
+#!/bin/sh
+# Taurus delivery standard: keep local agent config out of every commit.
+#
+# .claude/, CLAUDE.md, AGENTS.md and .mcp.json stay on the machine. The one
+# exception is the taurus-skill repo itself, which carries .taurus-skill-source.
+#
+# This runs after git has staged, so no pathspec magic, alias, or force flag
+# changes what it sees. Installed by taurus-skill/install.sh via core.hooksPath.
+
+set -e
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$ROOT" ] && [ -f "$ROOT/.taurus-skill-source" ]; then
+    exit 0
+fi
+
+STAGED="$(git diff --cached --name-only)"
+HITS="$(printf '%s\n' "$STAGED" | grep -E '(^|/)(CLAUDE\.md|AGENTS\.md|\.mcp\.json)$|(^|/)\.claude(/|$)' || true)"
+
+if [ -n "$HITS" ]; then
+    echo "Commit rejected: local agent config is staged." >&2
+    printf '%s\n' "$HITS" | sed 's/^/  /' >&2
+    echo "" >&2
+    echo "Run: git restore --staged <path>" >&2
+    echo "Then add the path to .gitignore in its own commit." >&2
+    exit 1
+fi
+
+GIT_DIR_PATH="$(git rev-parse --git-dir 2>/dev/null || true)"
+REPO_HOOK="${GIT_DIR_PATH:+$GIT_DIR_PATH/hooks/pre-commit}"
+if [ -n "$REPO_HOOK" ] && [ -x "$REPO_HOOK" ] && [ "$REPO_HOOK" != "$0" ]; then
+    exec "$REPO_HOOK" "$@"
+fi

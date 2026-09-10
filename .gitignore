@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+tests/.tmp-*
+
+# The global gitignore installed by ./install.sh hides agent config everywhere.
+# This repo is the source of that config, so it un-ignores its own.
+!CLAUDE.md
+!.claude/
