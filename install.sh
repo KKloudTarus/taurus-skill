@@ -8,8 +8,9 @@
 #   ./install.sh                 install or update
 #   ./install.sh --dry-run       print what would change
 #   ./install.sh --uninstall     remove everything this script created
+#   ./install.sh --githooks      opt in to the global core.hooksPath
 #   ./install.sh --no-gitignore  skip the global gitignore entries
-#   ./install.sh --no-githooks   skip the global core.hooksPath
+#   ./install.sh --no-githooks   compatibility alias for the safe default
 #
 # CLAUDE_CONFIG_DIR overrides the target directory (used by the test suite).
 
@@ -26,12 +27,13 @@ END="<!-- taurus:end -->"
 DRY_RUN=0
 UNINSTALL=0
 DO_GITIGNORE=1
-DO_GITHOOKS=1
+DO_GITHOOKS=0
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --uninstall) UNINSTALL=1 ;;
+    --githooks) DO_GITHOOKS=1 ;;
     --no-gitignore) DO_GITIGNORE=0 ;;
     --no-githooks) DO_GITHOOKS=0 ;;
     -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -271,7 +273,13 @@ link_into "$REPO/commands" "$CLAUDE_DIR/commands" '*.md'
 
 write_settings install
 write_memory_block
-[ "$DO_GITHOOKS" = 1 ] && write_hookspath
+if [ "$DO_GITHOOKS" = 1 ]; then
+  write_hookspath
+else
+  # Migrate installations from versions that enabled the global path by default.
+  # Only the exact path managed by this installer is removed.
+  remove_hookspath
+fi
 [ "$DO_GITIGNORE" = 1 ] && write_gitignore
 
 say ""

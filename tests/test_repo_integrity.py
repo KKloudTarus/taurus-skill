@@ -256,11 +256,12 @@ class TestExecutables(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(ROOT, "rules", "always-on.md")))
 
     def test_the_installer_wires_the_git_hooks(self):
-        """The hooks are the control of record, so the installer must set them up."""
+        """Machine-wide Git hooks stay available, but only through explicit opt-in."""
         with open(os.path.join(ROOT, "install.sh"), encoding="utf-8") as fh:
             source = fh.read()
         self.assertIn("core.hooksPath", source)
-        self.assertIn("--no-githooks", source, "no way to skip the global git config")
+        self.assertIn("--githooks", source, "no way to opt in to Git-side enforcement")
+        self.assertIn("DO_GITHOOKS=0", source, "global hooks must be disabled by default")
 
     def test_the_guard_runs_the_commit_linter(self):
         with open(os.path.join(ROOT, "hooks", "guard-git.py"), encoding="utf-8") as fh:

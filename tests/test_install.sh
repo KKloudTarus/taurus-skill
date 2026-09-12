@@ -139,5 +139,19 @@ check "refusal explains why"                        grep -q "not the taurus-skil
 rm -rf "$fake"
 teardown
 
+# --- global Git hooks are opt-in and legacy installs migrate safely ---------
+setup
+mkdir -p "$WORK/home"
+HOME="$WORK/home" bash "$REPO/install.sh" --no-gitignore >/dev/null 2>&1
+check_not "default install leaves core.hooksPath unset" \
+  env HOME="$WORK/home" git config --global --get core.hooksPath
+HOME="$WORK/home" bash "$REPO/install.sh" --githooks --no-gitignore >/dev/null 2>&1
+check "githooks flag sets the managed path" test \
+  "$(HOME="$WORK/home" git config --global --get core.hooksPath)" = "$CLAUDE_CONFIG_DIR/taurus/githooks"
+HOME="$WORK/home" bash "$REPO/install.sh" --no-gitignore >/dev/null 2>&1
+check_not "default reinstall removes the legacy managed path" \
+  env HOME="$WORK/home" git config --global --get core.hooksPath
+teardown
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

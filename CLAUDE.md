@@ -38,9 +38,9 @@ bash tests/test_install.sh
 - `hooks/guard-git.py` never guesses at shell quoting. `hooks/shellscan.py` is the
   lexer; ask it whether a span is code or data. Regex-over-raw-text produced both
   false blocks and real bypasses, twice.
-- The guard is the fast layer. `githooks/` is the control of record, wired into every
-  repo by `install.sh` through `core.hooksPath`. A rule that must actually hold goes
-  in a git hook, not only in the guard.
+- The guard is the default layer. `githooks/` adds Git-side enforcement only when
+  installation uses `--githooks`; `core.hooksPath` is intentionally opt-in because
+  it affects every repository on the machine.
 - `core.hooksPath` replaces a repo's whole hook directory, so `githooks/` carries a
   stub for every hook name git defines. Fifteen of the eighteen enforce nothing and
   exist only to `exec` the repo's own `.git/hooks/<name>`. Adding a hook name means
@@ -51,8 +51,9 @@ bash tests/test_install.sh
   `~/.claude/taurus`. Editing a linter in the working copy does not change what the
   hook runs unless `TAURUS_ROOT` points here, which is what `tests/test_git_hooks.py`
   sets.
-- Anything in `install.sh` that writes global git config needs an opt-out flag, and
-  `tests/test_install.sh` must pass it. `CLAUDE_CONFIG_DIR` does not isolate git.
+- Anything in `install.sh` that writes global Git config must be opt-in. Tests of
+  that path isolate both `HOME` and `CLAUDE_CONFIG_DIR`; the latter alone does not
+  isolate Git.
 - Every markdown file in the pack is linted by `tests/test_repo_integrity.py`
   against the standard the pack ships. Wrap examples that intentionally trigger a rule in
   `<!-- prose-lint-disable -->` and `<!-- prose-lint-enable -->` rather than

@@ -17,6 +17,7 @@ the install uses symlinks, so no reinstall is needed.
 
 ```bash
 ./install.sh --dry-run        # show what would change
+./install.sh --githooks       # opt in to global Git-side enforcement
 ./install.sh --no-gitignore   # skip the global gitignore entries
 ./install.sh --uninstall      # remove everything the installer created
 ```
@@ -32,8 +33,8 @@ What it touches, all idempotently:
 | `~/.claude/settings.json` | adds one `PreToolUse` Bash hook, preserving existing hooks |
 | `~/.claude/CLAUDE.md` | replaces the block between the `taurus:begin` and `taurus:end` markers |
 | global gitignore | adds `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json` |
-| global `core.hooksPath` | points at `githooks/`, skipped when it is already set elsewhere |
-| | `githooks/` chains back to each repo's own `.git/hooks/<name>`, so nothing stops running |
+| global `core.hooksPath` | unchanged by default; `--githooks` points it at `githooks/` |
+| | Opt-in hooks chain back to each repo's own `.git/hooks/<name>` |
 
 Existing files are never overwritten. A path that already exists and is not a
 symlink is skipped with a message. Reinstalling prunes symlinks into the repo that
@@ -117,8 +118,14 @@ command substitution, a nested shell, an unresolvable alias, a global flag it do
 know, or a message file that does not exist yet. Two spellings always work: one `-m`
 per paragraph, or a message file written in its own command and passed with `-F`.
 
-The guard is the fast layer, not the control of record. That is `githooks/`, wired
-into every repo through `core.hooksPath`.
+The guard is the default enforcement layer for Claude Code. Git-side enforcement in
+`githooks/` is optional because `core.hooksPath` affects every Git repository and
+can conflict with an existing hook manager or macOS permissions. Enable it only when
+that machine-level tradeoff is intentional:
+
+```bash
+./install.sh --githooks
+```
 
 This repo carries a `.taurus-skill-source` marker, which exempts it from the path
 rules so it can version its own configuration. The attribution rules apply everywhere.
@@ -172,9 +179,9 @@ plan or model evaluation, reviewers, and unresolved findings.
 - run: python3 ~/.claude/taurus/hooks/lint-commit.py --stdin --pr-title <<< "$PR_TITLE"
 ```
 
-The installer already wires the Git-side checks into every repo through
-`core.hooksPath`. The gate report is local evidence for the exact pre-ship worktree;
-CI should still run its own build, test, lint, and type-check jobs.
+Install Git-side checks with `./install.sh --githooks` when machine-wide enforcement
+is wanted. The gate report is local evidence for the exact pre-ship worktree; CI
+should still run its own build, test, lint, and type-check jobs.
 
 ## Tests
 
@@ -197,7 +204,7 @@ skills/taurus/references/  the depth, read on demand, invisible to the picker
 agents/<name>.md        specialist subagents
 commands/<name>.md      slash commands
 hooks/                  guards, linters, shell scanner, gate report writer
-githooks/               commit-msg, pre-commit, pre-push, wired via core.hooksPath
+githooks/               optional commit-msg, pre-commit, and pre-push enforcement
 tests/                  the seven suites
 install.sh              installer, updater, uninstaller
 ```
