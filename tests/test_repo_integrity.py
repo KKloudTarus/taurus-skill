@@ -335,7 +335,8 @@ class TestDocumentedExamples(unittest.TestCase):
 def markdown_files():
     targets = []
     for pattern in ("*.md", "skills/*/SKILL.md", "skills/*/references/*.md",
-                    "agents/*.md", "commands/*.md", "rules/*.md"):
+                    "agents/*.md", "commands/*.md", "rules/*.md",
+                    "compat/codex/skills/*/SKILL.md"):
         targets.extend(glob.glob(os.path.join(ROOT, pattern)))
     return sorted(targets)
 
@@ -382,6 +383,48 @@ class TestOwnProseIsClean(unittest.TestCase):
             [sys.executable, LINT, *targets], capture_output=True, text=True, timeout=120
         )
         self.assertEqual(proc.returncode, 0, "the pack violates its own writing standard:\n" + proc.stdout)
+
+
+class TestCodexCompat(unittest.TestCase):
+    def test_command_skills_match_their_commands(self):
+        skills = sorted(glob.glob(os.path.join(ROOT, "compat", "codex", "skills", "*", "SKILL.md")))
+        self.assertEqual(
+            [os.path.basename(os.path.dirname(path)) for path in skills],
+            ["taurus-deliver", "taurus-panel", "taurus-ship", "taurus-style", "taurus-verify"],
+        )
+        name_re = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+        for path in skills:
+            fields, _ = frontmatter(path)
+            directory = os.path.basename(os.path.dirname(path))
+            self.assertEqual(fields.get("name"), directory, path)
+            self.assertRegex(directory, name_re)
+            self.assertLessEqual(len(directory), 64, path)
+            with open(path, encoding="utf-8") as fh:
+                raw = fh.read()
+            described = re.search(r"(?m)^description: (.*)$", raw)
+            self.assertIsNotNone(described, path)
+            self.assertGreater(len(described.group(1)), 0, path)
+            self.assertLessEqual(len(described.group(1)), 500, path)
+            command = directory[len("taurus-"):]
+            cmd_fields, _ = frontmatter(os.path.join(ROOT, "commands", command + ".md"))
+            self.assertEqual(fields.get("description"), cmd_fields.get("description"), path)
+
+    def test_agent_stubs_match_frontmatter(self):
+        tomls = sorted(glob.glob(os.path.join(ROOT, "compat", "codex", "agents", "*.toml")))
+        names = [os.path.basename(path)[:-3] for path in agents()]
+        self.assertEqual([os.path.basename(path)[:-5] for path in tomls], names)
+        for path in tomls:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            name = os.path.basename(path)[:-5]
+            fields, _ = frontmatter(os.path.join(ROOT, "agents", name + ".md"))
+            self.assertRegex(text, rf'(?m)^name = "{re.escape(name)}"\s*$')
+            described = re.search(r'(?m)^description = "(.*)"\s*$', text)
+            self.assertIsNotNone(described, path)
+            self.assertEqual(described.group(1), fields.get("description"), path)
+            self.assertRegex(text, r'(?m)^sandbox_mode = "read-only"\s*$')
+            self.assertIsNone(re.search(r"(?m)^model\s*=", text), path)
+            self.assertIn(f"agents/{name}.md", text)
 
 
 if __name__ == "__main__":

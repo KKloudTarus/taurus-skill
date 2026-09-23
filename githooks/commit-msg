@@ -10,7 +10,19 @@
 
 set -e
 
-TAURUS_ROOT="${TAURUS_ROOT:-$HOME/.claude/taurus}"
+# Claude and Codex installs symlink the same pack. Prefer an explicit root, then
+# whichever install is actually present.
+if [ -z "${TAURUS_ROOT:-}" ]; then
+    if [ -d "$HOME/.claude/taurus" ]; then
+        TAURUS_ROOT="$HOME/.claude/taurus"
+    elif [ -n "${CODEX_HOME:-}" ] && [ -d "$CODEX_HOME/taurus" ]; then
+        TAURUS_ROOT="$CODEX_HOME/taurus"
+    elif [ -d "$HOME/.codex/taurus" ]; then
+        TAURUS_ROOT="$HOME/.codex/taurus"
+    else
+        TAURUS_ROOT="$HOME/.claude/taurus"
+    fi
+fi
 MSG_FILE="$1"
 
 if [ -f "$TAURUS_ROOT/hooks/lint-commit.py" ]; then
