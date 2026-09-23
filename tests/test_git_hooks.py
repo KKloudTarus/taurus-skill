@@ -90,25 +90,49 @@ class TestTaurusRoot(unittest.TestCase):
             cwd=home, capture_output=True, text=True, env=env, timeout=30,
         )
 
-    def test_commit_msg_uses_codex_root_when_claude_root_is_missing(self):
+    def test_the_hook_lints_with_its_own_pack(self):
         home = tempfile.mkdtemp(prefix="taurus-home-")
         try:
-            os.makedirs(os.path.join(home, ".codex"))
-            subprocess.run(["ln", "-sfn", ROOT, os.path.join(home, ".codex", "taurus")], check=True)
+            os.makedirs(os.path.join(home, ".claude", "taurus"))
             proc = self._run_commit_msg(home, "wip\n")
             self.assertNotEqual(proc.returncode, 0, proc.stderr)
             self.assertIn("Conventional Commits", proc.stderr)
         finally:
             shutil.rmtree(home, ignore_errors=True)
 
-    def test_claude_root_wins_when_both_installs_exist(self):
+    def test_explicit_root_overrides_the_script_pack(self):
+        home = tempfile.mkdtemp(prefix="taurus-home-")
+        root = os.path.join(home, "stub")
+        os.makedirs(os.path.join(root, "hooks"))
+        for name in ("lint-commit.py", "lint-prose.py"):
+            with open(os.path.join(root, "hooks", name), "w", encoding="utf-8") as fh:
+                fh.write("import sys\nsys.exit(0)\n")
+        try:
+            proc = self._run_commit_msg(home, "wip\n", extra_env={"TAURUS_ROOT": root})
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_detached_hook_uses_a_codex_install_when_claude_has_no_linter(self):
         home = tempfile.mkdtemp(prefix="taurus-home-")
         try:
             os.makedirs(os.path.join(home, ".claude", "taurus"))
             os.makedirs(os.path.join(home, ".codex"))
             subprocess.run(["ln", "-sfn", ROOT, os.path.join(home, ".codex", "taurus")], check=True)
-            proc = self._run_commit_msg(home, "wip\n")
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            detached = os.path.join(home, "commit-msg")
+            shutil.copy(os.path.join(HOOKS, "commit-msg"), detached)
+            msg = os.path.join(home, "msg")
+            with open(msg, "w", encoding="utf-8") as fh:
+                fh.write("wip\n")
+            env = dict(os.environ)
+            env.pop("TAURUS_ROOT", None)
+            env["HOME"] = home
+            proc = subprocess.run(
+                ["sh", detached, msg],
+                cwd=home, capture_output=True, text=True, env=env, timeout=30,
+            )
+            self.assertNotEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("Conventional Commits", proc.stderr)
         finally:
             shutil.rmtree(home, ignore_errors=True)
 

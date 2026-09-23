@@ -46,7 +46,8 @@ Codex uses the same source files through `--target codex`. `git pull` still upda
 policy, because the installed entries are symlinks. Codex has no custom slash
 commands, so each command is a skill invoked as `$taurus-verify` and the other four
 names. Subagents are TOML stubs that point back at `agents/*.md`. The installer does
-not write `~/.codex/config.toml`.
+not write `~/.codex/config.toml`. On Windows the hook command is stored as
+`commandWindows`, because Codex runs hooks with cmd.exe.
 
 | Target | Change |
 |---|---|

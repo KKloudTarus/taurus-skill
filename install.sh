@@ -230,29 +230,52 @@ PY
 
 # --- Codex hooks.json -------------------------------------------------------
 
+# Codex runs hooks with cmd.exe on Windows and uses commandWindows there.
+# The unix command stays for every other platform. A native path is required:
+# an MSYS path such as /c/Users/... is not a path cmd.exe can run.
+codex_windows_command() {
+  local guard="$1" py
+  command -v cygpath >/dev/null 2>&1 || return 0
+  py="$(command -v python3 || true)"
+  [ -n "$py" ] || return 0
+  printf '"%s" "%s"\n' "$(cygpath -w "$py")" "$(cygpath -w "$guard")"
+}
+
 write_codex_hooks() {
-  local mode="$1" path="$2" guard="$3"
+  local mode="$1" path="$2" guard="$3" win_cmd="${4:-}"
   if [ "$DRY_RUN" = 1 ]; then say "  would: $mode hook wiring in $path"; return 0; fi
-  python3 - "$path" "$guard" "$mode" <<'PY'
+  python3 - "$path" "$guard" "$mode" "$win_cmd" <<'PY'
 import json, os, sys
 path, guard, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+win_cmd = sys.argv[4] if len(sys.argv) > 4 else ""
 existed = os.path.exists(path)
 if mode != "install" and not existed:
     sys.exit(0)
 os.makedirs(os.path.dirname(path), exist_ok=True)
-try:
-    with open(path, encoding="utf-8") as fh:
-        doc = json.load(fh)
-except (OSError, json.JSONDecodeError):
+if existed:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"refusing to change {path}: {exc}\n")
+        sys.exit(1)
+else:
     doc = {}
 if not isinstance(doc, dict):
-    doc = {}
+    sys.stderr.write(f"refusing to change {path}: top level is not an object\n")
+    sys.exit(1)
 
 command = f"python3 {guard}"
 hooks = doc.setdefault("hooks", {})
 pre = hooks.setdefault("PreToolUse", [])
 if not isinstance(pre, list):
     pre = []
+
+def is_guard(handler):
+    if not isinstance(handler, dict):
+        return False
+    text = str(handler.get("command", "")) + " " + str(handler.get("commandWindows", ""))
+    return "guard-git.py" in text
 
 def strip_guard(entries):
     kept = []
@@ -264,7 +287,7 @@ def strip_guard(entries):
         if not isinstance(inner, list):
             kept.append(entry)
             continue
-        filtered = [h for h in inner if not (isinstance(h, dict) and "guard-git.py" in str(h.get("command", "")))]
+        filtered = [h for h in inner if not is_guard(h)]
         if filtered:
             entry = {**entry, "hooks": filtered}
             kept.append(entry)
@@ -281,6 +304,8 @@ if mode == "install":
         "timeout": 30,
         "statusMessage": "Checking git command",
     }
+    if win_cmd:
+        handler["commandWindows"] = win_cmd
     for entry in pre:
         if isinstance(entry, dict) and entry.get("matcher") == matcher:
             entry.setdefault("hooks", []).append(handler)
@@ -344,10 +369,52 @@ remove_hookspath() {
   say "  unset core.hooksPath"
 }
 
+same_dir() {
+  local left right
+  [ "$1" = "$2" ] && return 0
+  [ -d "$1" ] && [ -d "$2" ] || return 1
+  left="$(cd "$1" && pwd -P)" || return 1
+  right="$(cd "$2" && pwd -P)" || return 1
+  [ "$left" = "$right" ]
+}
+
+# Uninstall only. core.hooksPath is one slot shared by both targets, and the
+# two taurus roots are symlinks to the same pack, so removing one must leave
+# the path pointed at the other. The no-flag migration still uses
+# remove_hookspath, which clears the slot.
+release_hookspath() {
+  local dest="$1" current other=""
+  current="$(git config --global --get core.hooksPath || true)"
+  [ -n "$current" ] || return 0
+  same_dir "$current" "$dest" || return 0
+  if [ "$dest" = "$CLAUDE_DIR/taurus/githooks" ] && [ -f "$CODEX_DIR/taurus/.taurus-skill-source" ]; then
+    other="$CODEX_DIR/taurus/githooks"
+  elif [ "$dest" = "$CODEX_DIR/taurus/githooks" ] && [ -f "$CLAUDE_DIR/taurus/.taurus-skill-source" ]; then
+    other="$CLAUDE_DIR/taurus/githooks"
+  fi
+  if [ -n "$other" ]; then
+    if [ "$current" = "$other" ]; then
+      say "  core.hooksPath stays on the remaining install ($current)"
+      return 0
+    fi
+    if [ "$DRY_RUN" = 1 ]; then say "  would: point core.hooksPath at $other"; return 0; fi
+    git config --global core.hooksPath "$other"
+    say "  core.hooksPath -> $other (other install still present)"
+    return 0
+  fi
+  if [ "$DRY_RUN" = 1 ]; then say "  would: unset core.hooksPath"; return 0; fi
+  git config --global --unset core.hooksPath
+  say "  unset core.hooksPath"
+}
+
 # --- global gitignore -------------------------------------------------------
 
-gitignore_file() {
-  local file
+write_gitignore() {
+  # One list for both targets. .codex/ is the Codex counterpart of .claude/.
+  # Do not capture this function: `run` prints the dry-run lines, and a
+  # command substitution would swallow them into the path.
+  local file entry
+  local label=".claude/, CLAUDE.md, AGENTS.md, .mcp.json, .codex/"
   file="$(git config --global --get core.excludesFile || true)"
   if [ -z "$file" ]; then
     file="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
@@ -355,14 +422,6 @@ gitignore_file() {
     run git config --global core.excludesFile "$file"
   fi
   file="${file/#\~/$HOME}"
-  printf '%s\n' "$file"
-}
-
-write_gitignore() {
-  # One list for both targets. .codex/ is the Codex counterpart of .claude/.
-  local file entry
-  local label=".claude/, CLAUDE.md, AGENTS.md, .mcp.json, .codex/"
-  file="$(gitignore_file)"
   if [ "$DRY_RUN" = 1 ]; then say "  would: add agent-config entries to $file"; return 0; fi
   touch "$file"
   for entry in ".claude/" "CLAUDE.md" "AGENTS.md" ".mcp.json" ".codex/"; do
@@ -389,7 +448,8 @@ install_codex() {
   link_into "$REPO/skills" "$HOME/.agents/skills" '*'
   link_into "$REPO/compat/codex/skills" "$HOME/.agents/skills" '*'
   link_into "$REPO/compat/codex/agents" "$CODEX_DIR/agents" '*.toml'
-  write_codex_hooks install "$CODEX_DIR/hooks.json" "$root/hooks/guard-git.py"
+  write_codex_hooks install "$CODEX_DIR/hooks.json" "$root/hooks/guard-git.py" \
+    "$(codex_windows_command "$root/hooks/guard-git.py")"
   write_marked_block "$CODEX_DIR/AGENTS.md" "$REPO/rules/always-on.md" "$REPO/rules/codex-delta.md"
   if [ -s "$override" ]; then
     say "  warning: $override is non-empty, so Codex ignores AGENTS.md"
@@ -402,9 +462,9 @@ uninstall_claude() {
   unlink_from "$CLAUDE_DIR/skills" "$REPO/skills"
   unlink_from "$CLAUDE_DIR/agents" "$REPO/agents"
   unlink_from "$CLAUDE_DIR/commands" "$REPO/commands"
+  release_hookspath "$root/githooks"
   [ -L "$root" ] && { run rm -f "$root"; say "  unlink $root"; }
   write_settings uninstall "$CLAUDE_DIR/settings.json" "$root/hooks/guard-git.py"
-  remove_hookspath "$root/githooks"
   remove_marked_block "$CLAUDE_DIR/CLAUDE.md"
 }
 
@@ -414,9 +474,9 @@ uninstall_codex() {
   unlink_from "$HOME/.agents/skills" "$REPO/skills"
   unlink_from "$HOME/.agents/skills" "$REPO/compat/codex/skills"
   unlink_from "$CODEX_DIR/agents" "$REPO/compat/codex/agents"
+  release_hookspath "$root/githooks"
   [ -L "$root" ] && { run rm -f "$root"; say "  unlink $root"; }
   write_codex_hooks uninstall "$CODEX_DIR/hooks.json" "$root/hooks/guard-git.py"
-  remove_hookspath "$root/githooks"
   remove_marked_block "$CODEX_DIR/AGENTS.md"
 }
 
