@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository packages the Taurus delivery standard for global Claude Code use. `skills/taurus/SKILL.md` is the single skill entry point; detailed guidance belongs in `skills/taurus/references/`. Always-loaded policy lives in `rules/always-on.md`. Reviewer definitions are under `agents/`, slash commands under `commands/`, Python enforcement tools under `hooks/`, and Git hook wrappers under `githooks/`. Tests live in `tests/`; `install.sh` manages global installation.
+This repository packages the Taurus delivery standard for global Claude Code use, with a Codex install target. `skills/taurus/SKILL.md` is the single skill entry point; detailed guidance belongs in `skills/taurus/references/`. Always-loaded policy lives in `rules/always-on.md`. `rules/codex-delta.md` is appended only for Codex. Reviewer definitions are under `agents/`, slash commands under `commands/`, and the Codex stubs that point at those files are under `compat/codex/`. Python enforcement tools live under `hooks/`, and Git hook wrappers under `githooks/`. Tests live in `tests/`; `install.sh` manages global installation. `./install.sh` targets Claude. `./install.sh --target codex` targets Codex.
 
 Keep `.taurus-skill-source` at the repository root. It permits this source repository to version local agent configuration while installed hooks block those files elsewhere.
 

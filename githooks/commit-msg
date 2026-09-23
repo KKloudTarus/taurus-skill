@@ -10,7 +10,24 @@
 
 set -e
 
-TAURUS_ROOT="${TAURUS_ROOT:-$HOME/.claude/taurus}"
+# Prefer an explicit root, then the pack this hook lives in. An empty
+# ~/.claude/taurus must not shadow a working install: a directory only counts
+# when it actually contains the linters. A copied hook with no sibling pack
+# falls through to whichever install has them.
+if [ -z "${TAURUS_ROOT:-}" ]; then
+    SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+    if [ -f "$SCRIPT_DIR/../hooks/lint-commit.py" ]; then
+        TAURUS_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
+    elif [ -f "$HOME/.claude/taurus/hooks/lint-commit.py" ]; then
+        TAURUS_ROOT="$HOME/.claude/taurus"
+    elif [ -n "${CODEX_HOME:-}" ] && [ -f "$CODEX_HOME/taurus/hooks/lint-commit.py" ]; then
+        TAURUS_ROOT="$CODEX_HOME/taurus"
+    elif [ -f "$HOME/.codex/taurus/hooks/lint-commit.py" ]; then
+        TAURUS_ROOT="$HOME/.codex/taurus"
+    else
+        TAURUS_ROOT="$HOME/.claude/taurus"
+    fi
+fi
 MSG_FILE="$1"
 
 if [ -f "$TAURUS_ROOT/hooks/lint-commit.py" ]; then

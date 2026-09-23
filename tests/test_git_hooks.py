@@ -75,6 +75,68 @@ class HookTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, f"expected acceptance, got: {proc.stderr}")
 
 
+class TestTaurusRoot(unittest.TestCase):
+    def _run_commit_msg(self, home, message, extra_env=None):
+        msg = os.path.join(home, "msg")
+        with open(msg, "w", encoding="utf-8") as fh:
+            fh.write(message)
+        env = dict(os.environ)
+        env.pop("TAURUS_ROOT", None)
+        env["HOME"] = home
+        if extra_env:
+            env.update(extra_env)
+        return subprocess.run(
+            ["sh", os.path.join(HOOKS, "commit-msg"), msg],
+            cwd=home, capture_output=True, text=True, env=env, timeout=30,
+        )
+
+    def test_the_hook_lints_with_its_own_pack(self):
+        home = tempfile.mkdtemp(prefix="taurus-home-")
+        try:
+            os.makedirs(os.path.join(home, ".claude", "taurus"))
+            proc = self._run_commit_msg(home, "wip\n")
+            self.assertNotEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("Conventional Commits", proc.stderr)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_explicit_root_overrides_the_script_pack(self):
+        home = tempfile.mkdtemp(prefix="taurus-home-")
+        root = os.path.join(home, "stub")
+        os.makedirs(os.path.join(root, "hooks"))
+        for name in ("lint-commit.py", "lint-prose.py"):
+            with open(os.path.join(root, "hooks", name), "w", encoding="utf-8") as fh:
+                fh.write("import sys\nsys.exit(0)\n")
+        try:
+            proc = self._run_commit_msg(home, "wip\n", extra_env={"TAURUS_ROOT": root})
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_detached_hook_uses_a_codex_install_when_claude_has_no_linter(self):
+        home = tempfile.mkdtemp(prefix="taurus-home-")
+        try:
+            os.makedirs(os.path.join(home, ".claude", "taurus"))
+            os.makedirs(os.path.join(home, ".codex"))
+            subprocess.run(["ln", "-sfn", ROOT, os.path.join(home, ".codex", "taurus")], check=True)
+            detached = os.path.join(home, "commit-msg")
+            shutil.copy(os.path.join(HOOKS, "commit-msg"), detached)
+            msg = os.path.join(home, "msg")
+            with open(msg, "w", encoding="utf-8") as fh:
+                fh.write("wip\n")
+            env = dict(os.environ)
+            env.pop("TAURUS_ROOT", None)
+            env["HOME"] = home
+            proc = subprocess.run(
+                ["sh", detached, msg],
+                cwd=home, capture_output=True, text=True, env=env, timeout=30,
+            )
+            self.assertNotEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("Conventional Commits", proc.stderr)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+
 class TestCommitMsgHook(HookTestCase):
     def test_rejects_a_non_conventional_subject(self):
         self.assertRejected(self.commit("wip", "--allow-empty"), "Conventional Commits")
@@ -123,6 +185,11 @@ class TestPreCommitHook(HookTestCase):
         self.write(".mcp.json", "{}\n")
         git(self.repo, "add", "-f", ".mcp.json", check=True)
         self.assertRejected(self.commit("chore: notes"))
+
+    def test_rejects_staged_codex_dir(self):
+        self.write(".codex/config.toml", "x\n")
+        git(self.repo, "add", "-f", ".codex/config.toml", check=True)
+        self.assertRejected(self.commit("chore: notes"), "local agent config")
 
     def test_accepts_a_clean_tree(self):
         self.write("src.py", "x = 1\n")

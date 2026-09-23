@@ -7,8 +7,9 @@ the machine, so a change here is a change to how every session behaves.
 ## Commands
 
 ```bash
-./run-tests.sh              # all seven suites, run before every commit
-./install.sh --dry-run      # show what an install would change
+./run-tests.sh                         # all seven suites, run before every commit
+./install.sh --dry-run                 # show what a Claude install would change
+./install.sh --target codex --dry-run  # show what a Codex install would change
 python3 hooks/lint-prose.py <files>
 ```
 
@@ -75,3 +76,10 @@ bash tests/test_install.sh
 `rules/always-on.md` is merged into the user's `~/.claude/CLAUDE.md` between the
 `taurus:begin` and `taurus:end` markers. It is the only always-loaded piece.
 Everything in `skills/` is model-invoked on demand.
+
+`./install.sh --target codex` installs the same standard for Codex. The marked
+block in `~/.codex/AGENTS.md` is the shared rules plus `rules/codex-delta.md`.
+Skills land in `~/.agents/skills`, including one stub per command under
+`compat/codex/skills/`. Subagent stubs live in `compat/codex/agents/` and symlink
+into `~/.codex/agents/`. The default target remains Claude, and the installer
+never writes Codex `config.toml`.

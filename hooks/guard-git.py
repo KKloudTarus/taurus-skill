@@ -4,7 +4,7 @@
 Blocks four classes of mistake:
   1. AI attribution in commit messages (Claude / Anthropic / Co-Authored-By / robot emoji).
   2. Commit messages that break publishing policy or Conventional Commits 1.0.0.
-  3. Staging or committing .claude/, CLAUDE.md, AGENTS.md, .mcp.json.
+  3. Staging or committing .claude/, CLAUDE.md, AGENTS.md, .mcp.json, or .codex/.
   4. Pushing a range whose commits touch those paths.
 
 Design note. This guard reads a command string that bash and git will each parse by
@@ -36,7 +36,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shellscan  # noqa: E402
 
-PRIVATE_PATHS = ("CLAUDE.md", "AGENTS.md", ".claude", ".mcp.json")
+PRIVATE_PATHS = ("CLAUDE.md", "AGENTS.md", ".claude", ".mcp.json", ".codex")
 
 ATTRIBUTION_PATTERNS = (
     re.compile(r"co-authored-by:.*(claude|anthropic|noreply@anthropic)", re.I),
@@ -684,7 +684,7 @@ def check_message(message: str, from_file: bool, has_body: bool) -> None:
 
 def check(payload: dict) -> None:
     tool = payload.get("tool_name") or payload.get("toolName")
-    if tool != "Bash":
+    if tool not in ("Bash", "shell"):
         return
     tool_input = payload.get("tool_input") or payload.get("toolInput") or {}
     command = tool_input.get("command") or ""
@@ -782,7 +782,7 @@ def check(payload: dict) -> None:
                 fail(
                     "BLOCKED by taurus git guard: refusing to stage "
                     f"{', '.join(sorted(set(hits)))}.\n"
-                    "CLAUDE.md, AGENTS.md, .claude/ and .mcp.json stay local. Add them to "
+                    f"{', '.join(PRIVATE_PATHS)} stay local. Add them to "
                     ".gitignore instead."
                 )
             for arg in args:

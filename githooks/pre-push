@@ -32,7 +32,7 @@ if [ -n "$ROOT" ] && [ -f "$ROOT/.taurus-skill-source" ]; then
 fi
 
 ZERO="0000000000000000000000000000000000000000"
-PATTERN='(^|/)(CLAUDE\.md|AGENTS\.md|\.mcp\.json)$|(^|/)\.claude(/|$)'
+PATTERN='(^|/)(CLAUDE\.md|AGENTS\.md|\.mcp\.json)$|(^|/)\.(claude|codex)(/|$)'
 FOUND=""
 
 FOUND="$(printf '%s\n' "$REFS" | while read -r _local_ref local_sha _remote_ref remote_sha; do

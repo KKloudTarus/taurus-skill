@@ -20,6 +20,8 @@ the install uses symlinks, so no reinstall is needed.
 ./install.sh --githooks       # opt in to global Git-side enforcement
 ./install.sh --no-gitignore   # skip the global gitignore entries
 ./install.sh --uninstall      # remove everything the installer created
+./install.sh --target codex   # install for Codex instead of Claude Code
+./install.sh --target all     # install both
 ```
 
 What it touches, all idempotently:
@@ -32,13 +34,36 @@ What it touches, all idempotently:
 | `~/.claude/commands/*.md` | symlink per command |
 | `~/.claude/settings.json` | adds one `PreToolUse` Bash hook, preserving existing hooks |
 | `~/.claude/CLAUDE.md` | replaces the block between the `taurus:begin` and `taurus:end` markers |
-| global gitignore | adds `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json` |
+| global gitignore | adds `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, `.codex/` |
 | global `core.hooksPath` | unchanged by default; `--githooks` points it at `githooks/` |
 | | Opt-in hooks chain back to each repo's own `.git/hooks/<name>` |
 
 Existing files are never overwritten. A path that already exists and is not a
 symlink is skipped with a message. Reinstalling prunes symlinks into the repo that
 no longer resolve, so a rename or a consolidation leaves nothing stale behind.
+
+Codex uses the same source files through `--target codex`. `git pull` still updates
+policy, because the installed entries are symlinks. Codex has no custom slash
+commands, so each command is a skill invoked as `$taurus-verify` and the other four
+names. Subagents are TOML stubs that point back at `agents/*.md`. The installer does
+not write `~/.codex/config.toml`. On Windows the hook command is stored as
+`commandWindows`, because Codex runs hooks with cmd.exe.
+
+| Target | Change |
+|---|---|
+| `~/.codex/taurus` | symlink to this repo (`CODEX_HOME` overrides the directory) |
+| `~/.agents/skills/taurus` | symlink to the one skill |
+| `~/.agents/skills/taurus-*` | one skill stub per command |
+| `~/.codex/agents/*.toml` | symlink per subagent |
+| `~/.codex/AGENTS.md` | shared rules, then `rules/codex-delta.md`, between the same markers |
+| `~/.codex/hooks.json` | one `PreToolUse` hook for `Bash` and `shell`, preserving existing hooks |
+| global gitignore | same entries as the Claude install |
+
+A non-empty `AGENTS.override.md` hides the global `AGENTS.md`. The installer warns
+and leaves the override in place. Trust the new hook in `/hooks` before Codex will
+run it. Commit rules do not change: `AGENTS.md` stays uncommitted, and `.codex/`
+is blocked the same way `.claude/` is. The installer does not enable commit
+attribution.
 
 ## Commands
 
@@ -109,7 +134,7 @@ Four mechanisms run outside the model's judgment.
 
 - a commit message carrying AI attribution, a `Co-Authored-By` trailer, or a robot emoji
 - a commit message that breaks Conventional Commits 1.0.0
-- staging, committing, or pushing `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`
+- staging, committing, or pushing `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, `.codex/`
 - a broad `git add` that would sweep any of those in
 
 It fails closed. bash and git each parse a command line by their own rules, so where
@@ -118,7 +143,8 @@ command substitution, a nested shell, an unresolvable alias, a global flag it do
 know, or a message file that does not exist yet. Two spellings always work: one `-m`
 per paragraph, or a message file written in its own command and passed with `-F`.
 
-The guard is the default enforcement layer for Claude Code. Git-side enforcement in
+The guard is the default enforcement layer for Claude Code. `--target codex` wires
+the same script. Git-side enforcement in
 `githooks/` is optional because `core.hooksPath` affects every Git repository and
 can conflict with an existing hook manager or macOS permissions. Enable it only when
 that machine-level tradeoff is intentional:

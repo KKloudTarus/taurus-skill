@@ -58,14 +58,14 @@ class GuardTestCase(unittest.TestCase):
             fh.write(content)
         return full
 
-    def assertBlocked(self, command, needle=None):
-        code, err = run_guard(command, self.repo)
+    def assertBlocked(self, command, needle=None, tool="Bash"):
+        code, err = run_guard(command, self.repo, tool=tool)
         self.assertEqual(code, BLOCK, f"expected block for {command!r}, stderr={err!r}")
         if needle:
             self.assertIn(needle, err)
 
-    def assertAllowed(self, command):
-        code, err = run_guard(command, self.repo)
+    def assertAllowed(self, command, tool="Bash"):
+        code, err = run_guard(command, self.repo, tool=tool)
         self.assertEqual(code, ALLOW, f"expected allow for {command!r}, stderr={err!r}")
 
 
@@ -115,6 +115,15 @@ class TestPrivatePaths(GuardTestCase):
     def test_blocks_add_of_agents_md(self):
         self.write("AGENTS.md", "x\n")
         self.assertBlocked("git add AGENTS.md")
+
+    def test_blocks_codex_directory(self):
+        os.makedirs(os.path.join(self.repo, ".codex"), exist_ok=True)
+        self.write(".codex/config.toml", "x\n")
+        self.assertBlocked("git add .codex/config.toml", ".codex")
+
+    def test_shell_tool_is_treated_as_bash(self):
+        self.write("CLAUDE.md", "x\n")
+        self.assertBlocked("git add CLAUDE.md", tool="shell")
 
     def test_blocks_add_of_mcp_json(self):
         self.write(".mcp.json", "{}\n")

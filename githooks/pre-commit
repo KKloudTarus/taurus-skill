@@ -1,7 +1,7 @@
 #!/bin/sh
 # Taurus delivery standard: keep local agent config out of every commit.
 #
-# .claude/, CLAUDE.md, AGENTS.md and .mcp.json stay on the machine. The one
+# .claude/, .codex/, CLAUDE.md, AGENTS.md and .mcp.json stay on the machine. The one
 # exception is the taurus-skill repo itself, which carries .taurus-skill-source.
 #
 # This runs after git has staged, so no pathspec magic, alias, or force flag
@@ -15,7 +15,7 @@ if [ -n "$ROOT" ] && [ -f "$ROOT/.taurus-skill-source" ]; then
 fi
 
 STAGED="$(git diff --cached --name-only)"
-HITS="$(printf '%s\n' "$STAGED" | grep -E '(^|/)(CLAUDE\.md|AGENTS\.md|\.mcp\.json)$|(^|/)\.claude(/|$)' || true)"
+HITS="$(printf '%s\n' "$STAGED" | grep -E '(^|/)(CLAUDE\.md|AGENTS\.md|\.mcp\.json)$|(^|/)\.(claude|codex)(/|$)' || true)"
 
 if [ -n "$HITS" ]; then
     echo "Commit rejected: local agent config is staged." >&2
