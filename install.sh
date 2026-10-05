@@ -151,6 +151,8 @@ existing = open(memory, encoding="utf-8").read() if os.path.exists(memory) else 
 if begin in existing and end in existing:
     head = existing.split(begin)[0]
     tail = existing.split(end, 1)[1]
+    if tail.startswith("\n"):
+        tail = tail[1:]
     updated = head + block + tail
 else:
     updated = (existing.rstrip() + "\n\n" if existing.strip() else "") + block
@@ -238,7 +240,7 @@ codex_windows_command() {
   command -v cygpath >/dev/null 2>&1 || return 0
   py="$(command -v python3 || true)"
   [ -n "$py" ] || return 0
-  printf '"%s" "%s"\n' "$(cygpath -w "$py")" "$(cygpath -w "$guard")"
+  python3 "$REPO/hooks/windows-hook-command.py" "$(cygpath -w "$py")" "$(cygpath -w "$guard")"
 }
 
 write_codex_hooks() {

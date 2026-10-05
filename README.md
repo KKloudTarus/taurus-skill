@@ -47,7 +47,13 @@ policy, because the installed entries are symlinks. Codex has no custom slash
 commands, so each command is a skill invoked as `$taurus-verify` and the other four
 names. Subagents are TOML stubs that point back at `agents/*.md`. The installer does
 not write `~/.codex/config.toml`. On Windows the hook command is stored as
-`commandWindows`, because Codex runs hooks with cmd.exe.
+`commandWindows`, because Codex runs hooks with cmd.exe. The Windows command uses
+Windows PowerShell's `-EncodedCommand` to pass installed paths without cmd.exe
+quoting, including spaces and Unicode. It forwards the JSON payload as UTF-8 and
+preserves the guard's exit code. The launcher uses the system PowerShell path under
+`%SystemRoot%`, which must not contain spaces. Reinstall with `--target codex` to
+update existing hook wiring, then review and trust the changed hook definition in
+Codex.
 
 | Target | Change |
 |---|---|
@@ -231,6 +237,6 @@ agents/<name>.md        specialist subagents
 commands/<name>.md      slash commands
 hooks/                  guards, linters, shell scanner, gate report writer
 githooks/               optional commit-msg, pre-commit, and pre-push enforcement
-tests/                  the seven suites
+tests/                  the eight suites
 install.sh              installer, updater, uninstaller
 ```
