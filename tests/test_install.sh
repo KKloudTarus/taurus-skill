@@ -179,7 +179,7 @@ check_not "codex hook has no profile flag"           grep -qF -e "--profile" "$C
 check "codex hook matcher covers shell"              contains "$CODEX_HOME/hooks.json" "^(Bash|shell)$"
 if command -v cygpath >/dev/null 2>&1; then
   check "codex hook has a windows command"             python3 -c "
-import json, sys
+import base64, json, sys
 doc = json.load(open(sys.argv[1], encoding='utf-8'))
 found = []
 for entry in doc['hooks']['PreToolUse']:
@@ -187,8 +187,10 @@ for entry in doc['hooks']['PreToolUse']:
         if 'guard-git.py' in hook.get('command', ''):
             found.append(hook.get('commandWindows', ''))
 assert len(found) == 1 and found[0], found
-assert '\\\\' in found[0]
-assert not found[0].startswith('python3 /')
+assert found[0].startswith(r'%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe ')
+script = base64.b64decode(found[0].rsplit(' ', 1)[1], validate=True).decode('utf-16-le')
+assert 'guard-git.py' in script
+assert 'exit \$LASTEXITCODE' in script
 " "$CODEX_HOME/hooks.json"
 else
   check_not "unix hook omits commandWindows"           contains "$CODEX_HOME/hooks.json" "commandWindows"

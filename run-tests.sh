@@ -17,6 +17,7 @@ run_suite "gate report"    python3 tests/test_gate_report.py
 run_suite "git guard"      python3 tests/test_guard_git.py
 run_suite "git hooks"      python3 tests/test_git_hooks.py
 run_suite "installer"      bash    tests/test_install.sh
+run_suite "windows hook"   python3 tests/test_windows_hook.py
 run_suite "repo integrity" python3 tests/test_repo_integrity.py
 
 printf '\n'

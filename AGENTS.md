@@ -8,7 +8,7 @@ Keep `.taurus-skill-source` at the repository root. It permits this source repos
 
 ## Build, Test, and Development Commands
 
-- `./run-tests.sh`: run all seven suites and report every failure.
+- `./run-tests.sh`: run all eight suites and report every failure.
 - `python3 tests/test_guard_git.py`: run one Python `unittest` suite.
 - `python3 tests/test_repo_integrity.py TestSkills.test_the_skill_routes_to_every_reference`: run one test method.
 - `bash tests/test_install.sh`: exercise installation against an isolated configuration directory.
