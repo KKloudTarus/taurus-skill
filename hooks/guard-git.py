@@ -4,7 +4,7 @@
 Blocks four classes of mistake:
   1. AI attribution in commit messages (Claude / Anthropic / Co-Authored-By / robot emoji).
   2. Commit messages that break publishing policy or Conventional Commits 1.0.0.
-  3. Staging or committing .claude/, CLAUDE.md, AGENTS.md, .mcp.json, or .codex/.
+  3. Staging or committing local agent config, including .claude/, .codex/, and .omp/.
   4. Pushing a range whose commits touch those paths.
 
 Design note. This guard reads a command string that bash and git will each parse by
@@ -36,7 +36,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shellscan  # noqa: E402
 
-PRIVATE_PATHS = ("CLAUDE.md", "AGENTS.md", ".claude", ".mcp.json", ".codex")
+PRIVATE_PATHS = ("CLAUDE.md", "AGENTS.md", ".claude", ".mcp.json", ".codex", ".omp")
 
 ATTRIBUTION_PATTERNS = (
     re.compile(r"co-authored-by:.*(claude|anthropic|noreply@anthropic)", re.I),
@@ -122,17 +122,45 @@ def read_payload() -> dict:
         return {}
 
 
-def git_out(args: list[str], timeout: int = 10) -> str | None:
+STRICT_MODE = False
+
+
+class InspectionError(RuntimeError):
+    """A strict-mode Git query could not establish the safety-relevant state."""
+
+
+def git_out(args: list[str], timeout: int = 10, required: bool = False) -> str | None:
     try:
         out = subprocess.run(["git", *args], capture_output=True, text=True, timeout=timeout)
-    except Exception:
+    except Exception as exc:
+        if STRICT_MODE and required:
+            raise InspectionError("a required Git inspection could not start or timed out") from exc
         return None
-    return out.stdout if out.returncode == 0 else None
+    if out.returncode == 0:
+        return out.stdout
+    if STRICT_MODE and required:
+        raise InspectionError("a required Git inspection returned an error")
+    return None
 
 
 def repo_root(cwd: str) -> str | None:
-    out = git_out(["-C", cwd, "rev-parse", "--show-toplevel"], timeout=5)
-    return out.strip() if out and out.strip() else None
+    try:
+        out = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception as exc:
+        if STRICT_MODE:
+            raise InspectionError("the repository root could not be inspected") from exc
+        return None
+    if out.returncode == 0:
+        root = out.stdout.strip()
+        return root or None
+    if "not a git repository" in out.stderr.lower():
+        return None
+    if STRICT_MODE:
+        raise InspectionError("the repository root could not be inspected")
+    return None
 
 
 def is_source_repo(root: str | None) -> bool:
@@ -417,7 +445,7 @@ def read_message_file(value: str, cwd: str) -> tuple[str, str | None]:
 def reused_message(root: str | None, rev: str) -> str:
     if not root:
         return ""
-    return git_out(["-C", root, "log", "-1", "--format=%B", rev]) or ""
+    return git_out(["-C", root, "log", "-1", "--format=%B", rev], required=True) or ""
 
 
 class CommitArgs:
@@ -557,8 +585,8 @@ def touches_private(paths: list[str]) -> list[str]:
 
 
 def git_lines(root: str, args: list[str]) -> list[str]:
-    out = git_out(["-C", root, *args])
-    return out.splitlines() if out else []
+    out = git_out(["-C", root, *args], required=True)
+    return out.splitlines() if out is not None else []
 
 
 def tracked_private(root: str, ref: str | None = None) -> list[str]:
@@ -593,7 +621,8 @@ def pushed_private(root: str, args: list[str]) -> list[str]:
         names = git_out(["-C", root, "log", "--name-only", "--format=", ref,
                          f"--not", f"--remotes={remote}"])
         if names is None:
-            names = git_out(["-C", root, "log", "--name-only", "--format=", "-n", "200", ref])
+            names = git_out(["-C", root, "log", "--name-only", "--format=", "-n", "200", ref],
+                            required=True)
         if names:
             hits.extend(touches_private(names.splitlines()))
         hits.extend(tracked_private(root, ref))
@@ -683,6 +712,9 @@ def check_message(message: str, from_file: bool, has_body: bool) -> None:
 
 
 def check(payload: dict) -> None:
+    global STRICT_MODE
+    STRICT_MODE = payload.get("taurus_strict") is True
+
     tool = payload.get("tool_name") or payload.get("toolName")
     if tool not in ("Bash", "shell"):
         return
@@ -843,7 +875,12 @@ def main() -> None:
     except MemoryError:
         fail("BLOCKED by taurus git guard: this command exhausted the guard's memory, so "
              "it was not checked.")
-    except Exception as exc:  # a guard bug must never wedge the session
+    except InspectionError as exc:
+        fail(f"BLOCKED by taurus git guard: {exc}, so the command was not checked.")
+    except Exception as exc:
+        if STRICT_MODE:
+            fail("BLOCKED by taurus git guard: an internal inspection error occurred, so "
+                 "the command was not checked.")
         sys.stderr.write(f"taurus git guard skipped after internal error: {exc}\n")
         sys.exit(0)
     sys.exit(0)

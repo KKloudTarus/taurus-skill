@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run every test in the pack. Exit non-zero on the first failing suite.
+# Run every test in the pack and report all failing suites.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -18,6 +18,8 @@ run_suite "git guard"      python3 tests/test_guard_git.py
 run_suite "git hooks"      python3 tests/test_git_hooks.py
 run_suite "installer"      bash    tests/test_install.sh
 run_suite "windows hook"   python3 tests/test_windows_hook.py
+run_suite "OMP installer"  python3 tests/test_omp_install.py
+run_suite "OMP extension"  bun test ./tests/test_omp_extension.ts
 run_suite "repo integrity" python3 tests/test_repo_integrity.py
 
 printf '\n'

@@ -2,9 +2,9 @@ stages: [test]
 
 test:
   stage: test
-  image: python:3.11-slim
+  image: oven/bun:1.4.3
   before_script:
-    - apt-get update -qq && apt-get install -y -qq git bash
+    - apt-get update -qq && apt-get install -y -qq git bash python3
     - git config --global user.email ci@example.com
     - git config --global user.name CI
   script:

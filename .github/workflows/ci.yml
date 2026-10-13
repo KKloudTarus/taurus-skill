@@ -12,6 +12,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.3"
       - name: Configure git identity for the guard tests
         run: |
           git config --global user.email ci@example.com
@@ -28,3 +31,10 @@ jobs:
           python-version: "3.11"
       - name: Exercise native cmd.exe hook launching
         run: python tests/test_windows_hook.py
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.3"
+      - name: Exercise native OMP project installation
+        run: python tests/test_omp_install.py
+      - name: Exercise OMP guard extension
+        run: bun test ./tests/test_omp_extension.ts

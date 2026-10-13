@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Install the Taurus delivery standard into Claude Code, Codex, or both.
+# Install the Taurus delivery standard into Claude Code, Codex, or one OMP project.
 #
-# Symlinks the repo so a `git pull` updates every project. Merges hook wiring
-# and the always-on rules idempotently. Never overwrites a real file, and never
-# writes Codex config.toml.
+# Symlinks the repo for Claude and Codex so a `git pull` updates every project.
+# OMP copies an isolated resource pack into an explicit project. The installers
+# merge their managed rules idempotently and never write Codex config.toml.
 #
 #   ./install.sh                 install or update Claude Code
 #   ./install.sh --target codex  install or update Codex
 #   ./install.sh --target all    install both
+#   ./install.sh --target omp --project PATH
+#                                install one OMP project
 #   ./install.sh --dry-run       print what would change
 #   ./install.sh --uninstall     remove everything this script created
 #   ./install.sh --githooks      opt in to the global core.hooksPath
@@ -29,35 +31,48 @@ DRY_RUN=0
 UNINSTALL=0
 DO_GITIGNORE=1
 DO_GITHOOKS=0
+GITHOOKS_REQUESTED=0
 TARGET="claude"
+PROJECT=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
-    --githooks) DO_GITHOOKS=1; shift ;;
+    --githooks) DO_GITHOOKS=1; GITHOOKS_REQUESTED=1; shift ;;
     --no-gitignore) DO_GITIGNORE=0; shift ;;
     --no-githooks) DO_GITHOOKS=0; shift ;;
     --target)
       [ $# -ge 2 ] || { echo "missing value for --target" >&2; exit 2; }
       TARGET="$2"; shift 2 ;;
     --target=*) TARGET="${1#--target=}"; shift ;;
+    --project)
+      [ $# -ge 2 ] || { echo "missing value for --project" >&2; exit 2; }
+      PROJECT="$2"; shift 2 ;;
+    --project=*) PROJECT="${1#--project=}"; shift ;;
     -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
 
 case "$TARGET" in
-  claude|codex|all) ;;
-  *) echo "unknown target: $TARGET (expected claude, codex, or all)" >&2; exit 2 ;;
+  claude|codex|all|omp) ;;
+  *) echo "unknown target: $TARGET (expected claude, codex, all, or omp)" >&2; exit 2 ;;
 esac
+
+if [ "$TARGET" = "omp" ]; then
+  [ -n "$PROJECT" ] || { echo "--target omp requires --project PATH" >&2; exit 2; }
+  [ "$GITHOOKS_REQUESTED" = 0 ] || { echo "--githooks is not supported with --target omp" >&2; exit 2; }
+else
+  [ -z "$PROJECT" ] || { echo "--project is only supported with --target omp" >&2; exit 2; }
+fi
 
 say()  { printf '%s\n' "$*"; }
 run()  { if [ "$DRY_RUN" = 1 ]; then say "  would: $*"; else "$@"; fi; }
 
 want() {
   case "$TARGET" in
-    all) return 0 ;;
+    all) [ "$1" = "claude" ] || [ "$1" = "codex" ] ;;
     "$1") return 0 ;;
     *) return 1 ;;
   esac
@@ -66,8 +81,16 @@ want() {
 require() {
   command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 1; }
 }
-require python3
-require git
+if [ "$TARGET" = "omp" ]; then
+  OMP_PYTHON="${TAURUS_PYTHON:-python3}"
+  case "$(uname -s 2>/dev/null || true)" in
+    MINGW*|MSYS*|CYGWIN*) OMP_PYTHON="${TAURUS_PYTHON:-python}" ;;
+  esac
+  require "$OMP_PYTHON"
+else
+  require python3
+  require git
+fi
 
 # --- link helpers -----------------------------------------------------------
 
@@ -458,6 +481,27 @@ install_codex() {
   fi
 }
 
+omp_project_path() {
+  local project="$PROJECT"
+  case "$(uname -s 2>/dev/null || true)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if command -v cygpath >/dev/null 2>&1; then
+        project="$(cygpath -w "$project")"
+      fi
+      ;;
+  esac
+  printf '%s\n' "$project"
+}
+
+run_omp_installer() {
+  local project
+  project="$(omp_project_path)"
+  local args=(--project "$project")
+  [ "$DRY_RUN" = 1 ] && args+=(--dry-run)
+  [ "$UNINSTALL" = 1 ] && args+=(--uninstall)
+  "$OMP_PYTHON" "$REPO/compat/omp/install.py" "${args[@]}"
+}
+
 uninstall_claude() {
   local root="$CLAUDE_DIR/taurus"
   say "Removing the Taurus delivery standard from $CLAUDE_DIR"
@@ -526,6 +570,10 @@ finish() {
 if [ "$UNINSTALL" = 1 ]; then
   want claude && uninstall_claude
   want codex && uninstall_codex
+  if want omp; then
+    run_omp_installer
+    exit 0
+  fi
   say "Done. The global gitignore entries were left in place."
   exit 0
 fi
@@ -534,6 +582,7 @@ say "Installing the Taurus delivery standard"
 say "  source: $REPO"
 want claude && say "  claude: $CLAUDE_DIR"
 want codex && say "  codex:  $CODEX_DIR"
+want omp && say "  omp project: $PROJECT"
 
 if [ ! -f "$REPO/.taurus-skill-source" ]; then
   echo "refusing to install: $REPO is not the taurus-skill repo" >&2
@@ -545,8 +594,12 @@ want codex && assert_link_root "$CODEX_DIR/taurus"
 
 want claude && install_claude
 want codex && install_codex
-apply_githooks
-if [ "$DO_GITIGNORE" = 1 ]; then
-  write_gitignore
+if want omp; then
+  run_omp_installer
+else
+  apply_githooks
+  if [ "$DO_GITIGNORE" = 1 ]; then
+    write_gitignore
+  fi
 fi
 finish

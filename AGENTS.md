@@ -2,17 +2,20 @@
 
 ## Project Structure & Module Organization
 
-This repository packages the Taurus delivery standard for global Claude Code use, with a Codex install target. `skills/taurus/SKILL.md` is the single skill entry point; detailed guidance belongs in `skills/taurus/references/`. Always-loaded policy lives in `rules/always-on.md`. `rules/codex-delta.md` is appended only for Codex. Reviewer definitions are under `agents/`, slash commands under `commands/`, and the Codex stubs that point at those files are under `compat/codex/`. Python enforcement tools live under `hooks/`, and Git hook wrappers under `githooks/`. Tests live in `tests/`; `install.sh` manages global installation. `./install.sh` targets Claude. `./install.sh --target codex` targets Codex.
+This repository packages the Taurus delivery standard for Claude Code, Codex, and OMP. `skills/taurus/SKILL.md` is the shared router; detailed guidance lives in `skills/taurus/references/`. Shared policy lives in `rules/always-on.md`, with client adaptations in `rules/codex-delta.md` and `rules/omp-delta.md`. Canonical reviewers are under `agents/`, workflows under `commands/`, and client adapters under `compat/`. Python enforcement tools live under `hooks/`, Git wrappers under `githooks/`, and tests under `tests/`. `install.sh` defaults to global Claude installation; `--target codex` is global Codex; `--target all` retains those two targets. `--target omp --project PATH` installs only into the selected project's `.omp/`; `compat/omp/install.py` is the native Python entry point on Windows.
 
 Keep `.taurus-skill-source` at the repository root. It permits this source repository to version local agent configuration while installed hooks block those files elsewhere.
 
 ## Build, Test, and Development Commands
 
-- `./run-tests.sh`: run all eight suites and report every failure.
+- `./run-tests.sh`: run all suites and report every failure (Python 3.11+, Git, Bash, and Bun 1.4.3).
 - `python3 tests/test_guard_git.py`: run one Python `unittest` suite.
 - `python3 tests/test_repo_integrity.py TestSkills.test_the_skill_routes_to_every_reference`: run one test method.
 - `bash tests/test_install.sh`: exercise installation against an isolated configuration directory.
 - `./install.sh --dry-run`: preview symlinks, settings, Git hooks, and ignore changes.
+- `python3 tests/test_omp_install.py`: exercise ownership-safe project install/update/uninstall.
+- `bun test ./tests/test_omp_extension.ts`: exercise native OMP guard behavior.
+- `python3 compat/omp/install.py --project PATH --dry-run`: preview OMP installation without writes.
 - `python3 hooks/lint-prose.py README.md`: check Markdown against the shipped writing standard.
 
 There is no compilation step. Run the full suite before each commit.

@@ -15,14 +15,17 @@ GUARD = os.path.join(ROOT, "hooks", "guard-git.py")
 ALLOW, BLOCK = 0, 2
 
 
-def run_guard(command, cwd, tool="Bash"):
-    payload = json.dumps({
+def run_guard(command, cwd, tool="Bash", strict=False, env=None):
+    payload = {
         "tool_name": tool,
         "tool_input": {"command": command},
         "cwd": cwd,
-    })
+    }
+    if strict:
+        payload["taurus_strict"] = True
     proc = subprocess.run(
-        [sys.executable, GUARD], input=payload, capture_output=True, text=True, timeout=30
+        [sys.executable, GUARD], input=json.dumps(payload), capture_output=True, text=True,
+        timeout=30, env=env,
     )
     return proc.returncode, proc.stderr
 
@@ -121,6 +124,22 @@ class TestPrivatePaths(GuardTestCase):
         self.write(".codex/config.toml", "x\n")
         self.assertBlocked("git add .codex/config.toml", ".codex")
 
+    def test_omp_config_stays_local_through_staging_commit_and_push(self):
+        self.write("nested/.omp/config.yml", "modelRoles: {}\n")
+        self.assertBlocked("git add nested/.omp/config.yml", ".omp")
+        self.assertBlocked("git add -A", ".omp")
+        git(self.repo, "add", "-f", "nested/.omp/config.yml")
+        self.assertBlocked('git commit -m "chore: settings"', "staged tree contains")
+        git(self.repo, "commit", "-qm", "chore: settings")
+        self.assertBlocked("git push origin main", "git rm -r --cached")
+
+    def test_omp_policy_preserves_source_exemption_and_similar_names(self):
+        self.write(".omp-config.yml", "local: false\n")
+        self.assertAllowed("git add .omp-config.yml")
+        self.write(".omp/config.yml", "modelRoles: {}\n")
+        self.write(".taurus-skill-source", "")
+        self.assertAllowed("git add .omp/config.yml")
+
     def test_shell_tool_is_treated_as_bash(self):
         self.write("CLAUDE.md", "x\n")
         self.assertBlocked("git add CLAUDE.md", tool="shell")
@@ -213,6 +232,41 @@ class TestCommandParsing(GuardTestCase):
             [sys.executable, GUARD], input="not json", capture_output=True, text=True, timeout=30
         )
         self.assertEqual(proc.returncode, ALLOW)
+
+
+class TestStrictInspection(GuardTestCase):
+    def test_strict_mode_blocks_when_bare_git_is_unavailable(self):
+        absolute_git = shutil.which("git")
+        if not absolute_git:
+            self.skipTest("git is required for guard tests")
+        environment = dict(os.environ)
+        environment["PATH"] = tempfile.mkdtemp(prefix="guard-no-git-")
+        try:
+            command = f'"{absolute_git}" status --short'
+            code, error = run_guard(command, self.repo, strict=True, env=environment)
+            self.assertEqual(code, BLOCK, error)
+            self.assertIn("could not be inspected", error)
+
+            code, error = run_guard(command, self.repo, env=environment)
+            self.assertEqual(code, ALLOW, error)
+        finally:
+            shutil.rmtree(environment["PATH"], ignore_errors=True)
+
+    def test_strict_mode_preserves_a_non_repository_read(self):
+        outside = tempfile.mkdtemp(prefix="guard-nonrepo-")
+        try:
+            code, error = run_guard("git status --short", outside, strict=True)
+            self.assertEqual(code, ALLOW, error)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_normal_non_git_command_is_unaffected(self):
+        outside = tempfile.mkdtemp(prefix="guard-nonrepo-")
+        try:
+            code, error = run_guard("echo hello", outside)
+            self.assertEqual(code, ALLOW, error)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
 
 
 class TestProseInCommitMessages(GuardTestCase):
