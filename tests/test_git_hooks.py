@@ -191,6 +191,11 @@ class TestPreCommitHook(HookTestCase):
         git(self.repo, "add", "-f", ".codex/config.toml", check=True)
         self.assertRejected(self.commit("chore: notes"), "local agent config")
 
+    def test_rejects_staged_omp_credentials(self):
+        self.write(".omp/models.yml", "providers: {}\n")
+        git(self.repo, "add", "-f", ".omp/models.yml", check=True)
+        self.assertRejected(self.commit("chore: settings"), "local agent config")
+
     def test_accepts_a_clean_tree(self):
         self.write("src.py", "x = 1\n")
         git(self.repo, "add", "src.py", check=True)
@@ -213,6 +218,16 @@ class TestPrePushHook(HookTestCase):
         git(self.repo, "rm", "-q", "--cached", "CLAUDE.md", check=True)
         self.force_commit("chore: stop tracking it")
         self.assertNotIn("CLAUDE.md", git(self.repo, "ls-files").stdout)
+        self.assertRejected(git(self.repo, "push", "-q", "origin", "main"),
+                            "local agent config")
+
+    def test_rejects_deleted_omp_config_in_pushed_history(self):
+        self.add_remote()
+        self.write("nested/.omp/config.yml", "modelRoles: {}\n")
+        git(self.repo, "add", "-f", "nested/.omp/config.yml", check=True)
+        self.force_commit("chore: settings")
+        git(self.repo, "rm", "-q", "--cached", "nested/.omp/config.yml", check=True)
+        self.force_commit("chore: stop tracking settings")
         self.assertRejected(git(self.repo, "push", "-q", "origin", "main"),
                             "local agent config")
 

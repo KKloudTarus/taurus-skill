@@ -1,8 +1,8 @@
 # Taurus delivery standard
 
-A global Claude Code skill pack. Install once per machine, and every project on that
-machine gets the same writing standard, engineering standard, verification gates,
-and multi-agent review protocol.
+A delivery-standard skill pack for Claude Code, Codex, and OMP. Claude and Codex
+install globally. OMP installs only into the projects you select, with native
+skills, read-only reviewers, and a project-local Git guard extension.
 
 ## Install
 
@@ -71,6 +71,78 @@ run it. Commit rules do not change: `AGENTS.md` stays uncommitted, and `.codex/`
 is blocked the same way `.claude/` is. The installer does not enable commit
 attribution.
 
+## OMP: selected projects only
+
+Use an existing project directory. OMP is deliberately not included in `--target all`,
+which still means the two global targets.
+
+```bash
+./install.sh --target omp --project /path/to/project --dry-run
+./install.sh --target omp --project /path/to/project
+```
+
+On Windows, no Bash or symlink privileges are needed for the direct installer:
+
+```powershell
+python compat/omp/install.py --project "C:\work\my project" --dry-run
+python compat/omp/install.py --project "C:\work\my project"
+```
+
+Run the same command separately for each project you want to opt in. Start OMP
+from that project root; do not assume launching in a child folder loads native
+project extensions. OMP must support project extensions, native skills, task agents,
+and `.omp/RULES.md`. The guard needs Git and Python on PATH (`python` on Windows,
+`python3` elsewhere); `TAURUS_PYTHON` can name an absolute interpreter executable.
+
+| Project path | Installed content |
+|---|---|
+| `.omp/skills/taurus` | Shared router and references |
+| `.omp/skills/taurus-*` | Five native workflow skill adapters |
+| `.omp/agents/*.md` | Ten read-only reviewer adapters using `@default` and auto effort |
+| `.omp/extensions/taurus.ts` | Native `bash` pre-tool Git guard |
+| `.omp/taurus` | Shared agent, command, rule, and Python hook resources |
+| `.omp/RULES.md` | Managed rules block, preserving surrounding project rules |
+| `.omp/taurus-install.json` | Ownership checksums for update and uninstall |
+
+No global OMP files, model roles, credentials, global Git ignore, or `core.hooksPath`
+are changed. Existing `.omp/config.yml`, `models.yml`, and unrelated agents stay
+untouched. The installer does not create an `AGENTS.md` that would shadow project
+instructions. `.omp/` stays local; add it to your project's local exclude rules if
+desired. The Git guard rejects staging it even without an ignore entry.
+
+OMP uses copies, not symlinks. After updating the source clone, rerun the installer
+for each project. It refuses conflicting files or locally edited managed copies
+before writing. Resolve those conflicts explicitly; it never silently overwrites
+them. Uninstall removes unchanged owned assets and preserves edited assets:
+
+```bash
+./install.sh --target omp --project /path/to/project --uninstall
+# Native Windows equivalent:
+python compat/omp/install.py --project "C:\work\my project" --uninstall
+```
+
+Use `/skill:taurus` for the router, or the workflows below:
+
+```text
+/skill:taurus-deliver implement the requested feature
+/skill:taurus-verify branch
+/skill:taurus-panel compare these designs
+/skill:taurus-ship prepare the authorized PR
+/skill:taurus-style README.md
+```
+
+`rules/omp-delta.md` adapts the shared contracts: the orchestrator coordinates,
+executors implement and run checks, and reviewers inspect the resulting evidence.
+Reviewers have only `read`, `grep`, and `glob`; unavailable evidence stays an
+explicit unknown, not a claimed pass. Native `task` dispatch uses `context`,
+`tasks[]`, and `solutionSpace`. Existing user model mappings are not replaced.
+A separate user-defined `pr-gate` is opt-in only, never a Taurus lifecycle step.
+
+The extension blocks failing Git guard checks on the native `bash` tool. It is not
+an OS sandbox: eval subprocesses, external terminals, and other execution tools
+are not intercepted. Disabling project extensions disables this guard. The OMP
+installer rejects `--githooks` rather than changing machine-wide policy.
+
 ## Commands
 
 | Command | Does |
@@ -83,10 +155,10 @@ attribution.
 
 ## The skill
 
-One skill, `taurus`, so the picker shows one entry. Its `SKILL.md` carries the rules
-that apply to every task and routes to the reference that carries the depth.
+One shared router skill, `taurus`, carries the rules and routes to the references.
+Codex and OMP additionally expose the five workflow adapters as skill entries.
 
-Claude sees the skill name and description during selection. It loads the router only
+The client sees the skill name and description during selection. It loads the router only
 when Taurus applies, then reads the engineering baseline and the smallest set of
 references required by the actual risk. It does not preload the reference directory.
 Engineering work reports that choice once:
@@ -136,11 +208,11 @@ the code before acting on it.
 
 Four mechanisms run outside the model's judgment.
 
-**Git guard** (`hooks/guard-git.py`, wired as a `PreToolUse` hook on Bash). Blocks:
+**Git guard** (`hooks/guard-git.py`, called by client hooks or the OMP extension). Blocks:
 
 - a commit message carrying AI attribution, a `Co-Authored-By` trailer, or a robot emoji
 - a commit message that breaks Conventional Commits 1.0.0
-- staging, committing, or pushing `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, `.codex/`
+- staging, committing, or pushing `.claude/`, `.codex/`, `.omp/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`
 - a broad `git add` that would sweep any of those in
 
 It fails closed. bash and git each parse a command line by their own rules, so where
@@ -237,6 +309,8 @@ agents/<name>.md        specialist subagents
 commands/<name>.md      slash commands
 hooks/                  guards, linters, shell scanner, gate report writer
 githooks/               optional commit-msg, pre-commit, and pre-push enforcement
-tests/                  the eight suites
+tests/                  Python, Bash, and Bun regression suites
 install.sh              installer, updater, uninstaller
+compat/omp/             native project installer, agents, skills, and extension
+rules/omp-delta.md      OMP project paths, delegation, and tool-boundary contract
 ```

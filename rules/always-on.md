@@ -16,8 +16,8 @@ Loaded in every session. Keep this layer small; detailed guidance belongs in the
 - Preserve the user's scope and authorization. Source changes do not authorize a
   commit, push, PR, deploy, infrastructure mutation, paid evaluation, or external action.
 - Never add AI attribution to commits, PRs, issues, changelogs, or code comments.
-- Outside the Taurus source repo, never commit or push `.claude/`, `CLAUDE.md`,
-  `AGENTS.md`, or `.mcp.json`.
+- Outside the Taurus source repo, never commit or push `.claude/`, `.codex/`,
+  `.omp/`, `CLAUDE.md`, `AGENTS.md`, or `.mcp.json`.
 - Commit messages and PR titles follow Conventional Commits. Repository hooks are the
   enforcement layer; do not bypass them.
 

@@ -14,8 +14,8 @@ committing.
 
 <!-- prose-lint-enable -->
 
-**Local agent config never leaves the machine.** .claude/, CLAUDE.md,
-AGENTS.md, and .mcp.json are never staged, committed, or pushed. `githooks/pre-commit`
+**Local agent config never leaves the machine.** .claude/, .codex/, .omp/,
+CLAUDE.md, AGENTS.md, and .mcp.json are never staged, committed, or pushed. `githooks/pre-commit`
 refuses the staged tree and `githooks/pre-push` refuses the pushed range, history
 included, since removing a file in a later commit leaves the blob behind. Both chain
 to the repository's own hook of the same name. The single
@@ -91,12 +91,13 @@ feat(inventory): hold seats under a row-level lock
 EOF
 ```
 
-Two layers enforce this. `githooks/commit-msg` runs inside git and sees the final
-message, so nothing routes around it; `install.sh` wires it into every repo through
-`core.hooksPath`. The `PreToolUse` guard is the fast layer in front, and it fails
-closed: a command it cannot read gets blocked, not waved through. Two spellings always
-work: one `-m` per paragraph, or a message file written in its own command and passed
-with `-F <file>`. `conventional-commits.md` lists the refused forms.
+Two enforcement layers are available. When installed, `githooks/commit-msg` runs
+inside git and sees the final message. Machine-wide Git hooks require the explicit
+`--githooks` opt-in for the global install targets; the OMP project installer does
+not change `core.hooksPath`. The session guard is the fast layer in front: client
+`PreToolUse` hooks or OMP's native `bash` interception. It fails closed when it
+cannot read a command confidently. Use one `-m` per paragraph or write a message
+file separately and pass `-F <file>`. `conventional-commits.md` lists refused forms.
 
 `--no-verify` is blocked. It exists to skip the layer that actually holds.
 
@@ -153,7 +154,7 @@ passes.
 - [ ] `git status --porcelain` reviewed, nothing unexpected staged
 - [ ] `git diff --cached` read line by line
 - [ ] No secrets, tokens, .env, keys, or dumps in the diff
-- [ ] No .claude/, CLAUDE.md, AGENTS.md, .mcp.json
+- [ ] No .claude/, .codex/, .omp/, CLAUDE.md, AGENTS.md, .mcp.json
 - [ ] No debug prints, commented-out code, or stray TODOs
 - [ ] Build and tests pass on this exact tree
 - [ ] Subject and footers pass `lint-commit.py`, prose passes `lint-prose.py`

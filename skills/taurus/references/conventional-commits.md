@@ -186,16 +186,17 @@ git config --global --get core.hooksPath
 
 ## Two layers
 
-The rule is enforced twice, because one layer alone cannot hold it.
+Two enforcement layers are available; their activation depends on the install target.
 
 | Layer | Sees | Can be routed around by |
 |---|---|---|
 | `githooks/commit-msg` | the final message git assembled | nothing, short of `--no-verify` |
-| `hooks/guard-git.py` (`PreToolUse`) | a command string, before it runs | any spelling bash and git agree on and the guard does not |
+| `hooks/guard-git.py` (client hook or OMP `bash` interception) | a command string, before it runs | other execution tools or shell spellings outside the parser's model |
 
-`install.sh` points `core.hooksPath` at the pack's `githooks/`, so `commit-msg`,
-`pre-commit`, and `pre-push` run in every repo on the machine. The guard blocks
-`--no-verify`, since that flag exists to skip the layer that actually holds.
+For global install targets, `install.sh --githooks` explicitly opts in to setting
+`core.hooksPath` to the pack's `githooks/`. Only then do those hooks run in every
+repo on the machine. The OMP project installer never changes `core.hooksPath`.
+The session guard blocks `--no-verify`; it does not sandbox other execution tools.
 
 `core.hooksPath` replaces a repository's hook directory outright, so `githooks/` also
 ships a passthrough for every other client-side hook name. Each one enforces nothing
