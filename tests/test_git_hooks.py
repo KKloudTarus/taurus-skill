@@ -225,6 +225,25 @@ class TestPrePushHook(HookTestCase):
         git(self.repo, "checkout", "-q", "main", check=True)
         self.assertRejected(git(self.repo, "push", "-q", "origin", "leak:main"))
 
+    def test_rejects_a_merge_commit_that_adds_private_paths(self):
+        """Plain `git log --name-only` prints nothing for a merge commit."""
+        self.add_remote()
+        self.assertAccepted(git(self.repo, "push", "-q", "origin", "main"))
+        git(self.repo, "checkout", "-q", "-b", "side", check=True)
+        self.write("side.txt", "s\n")
+        git(self.repo, "add", "side.txt", check=True)
+        self.commit("feat: side", check=True)
+        git(self.repo, "checkout", "-q", "-b", "feat", "main", check=True)
+        self.write("feat.txt", "f\n")
+        git(self.repo, "add", "feat.txt", check=True)
+        self.commit("feat: feat", check=True)
+        git(self.repo, "merge", "-q", "--no-ff", "--no-commit", "side", check=True)
+        self.write("CLAUDE.md", "rules\n")
+        git(self.repo, "add", "-f", "CLAUDE.md", check=True)
+        self.force_commit("chore: merge side")
+        self.assertRejected(git(self.repo, "push", "-q", "origin", "feat"),
+                            "local agent config")
+
     def test_accepts_a_clean_push(self):
         self.add_remote()
         self.write("src.py", "x = 1\n")

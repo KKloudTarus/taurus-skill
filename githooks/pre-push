@@ -43,8 +43,10 @@ FOUND="$(printf '%s\n' "$REFS" | while read -r _local_ref local_sha _remote_ref 
     else
         RANGE="$remote_sha..$local_sha"
     fi
+    # --cc makes a merge commit list the paths it introduces; plain --name-only
+    # prints none for a merge.
     # shellcheck disable=SC2086
-    git log --name-only --format= $RANGE 2>/dev/null | grep -E "$PATTERN" || true
+    git log --name-only --cc --format= $RANGE 2>/dev/null | grep -E "$PATTERN" || true
 done | sort -u | grep -v '^$' || true)"
 
 if [ -n "$FOUND" ]; then
