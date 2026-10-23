@@ -590,13 +590,19 @@ def pushed_private(root: str, args: list[str]) -> list[str]:
     for ref in refs:
         if not ref or ref == ".":
             continue
-        names = git_out(["-C", root, "log", "--name-only", "--format=", ref,
+        # Only the commits being sent count, as in githooks/pre-push, so a private
+        # path the remote already tracks and these commits leave alone does not
+        # block. --cc makes a merge commit list the paths it introduces; plain
+        # --name-only prints none for a merge.
+        names = git_out(["-C", root, "log", "--name-only", "--cc", "--format=", ref,
                          f"--not", f"--remotes={remote}"])
         if names is None:
-            names = git_out(["-C", root, "log", "--name-only", "--format=", "-n", "200", ref])
+            # The range could not be computed, so judge recent history and the tip.
+            names = git_out(["-C", root, "log", "--name-only", "--cc", "--format=",
+                             "-n", "200", ref])
+            hits.extend(tracked_private(root, ref))
         if names:
             hits.extend(touches_private(names.splitlines()))
-        hits.extend(tracked_private(root, ref))
     return hits
 
 

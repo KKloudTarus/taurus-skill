@@ -462,6 +462,54 @@ class TestPushRefs(GuardTestCase):
     def test_allows_pushing_a_clean_branch(self):
         self.assertAllowed("git push origin main")
 
+    def add_remote(self):
+        self.remote = tempfile.mkdtemp(prefix="guard-remote-")
+        self.addCleanup(shutil.rmtree, self.remote, True)
+        git(self.remote, "init", "-q", "--bare")
+        git(self.repo, "remote", "add", "origin", self.remote)
+
+    def add_remote_with_tracked_claude_md(self):
+        """A team repo that already tracks CLAUDE.md on its remote."""
+        self.add_remote()
+        self.write("CLAUDE.md", "team rules\n")
+        git(self.repo, "add", "-f", "CLAUDE.md")
+        git(self.repo, "commit", "-qm", "docs: team rules")
+        git(self.repo, "push", "-q", "origin", "main")
+
+    def test_allows_pushing_new_work_when_remote_already_tracks_private_path(self):
+        self.add_remote_with_tracked_claude_md()
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        self.write("src.py", "x = 1\n")
+        git(self.repo, "add", "src.py")
+        git(self.repo, "commit", "-qm", "feat: add src")
+        self.assertAllowed("git push -u origin feature")
+
+    def test_blocks_pushing_a_change_to_a_private_path_the_remote_tracks(self):
+        self.add_remote_with_tracked_claude_md()
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        self.write("CLAUDE.md", "team rules\nmy local notes\n")
+        git(self.repo, "add", "-f", "CLAUDE.md")
+        git(self.repo, "commit", "-qm", "docs: notes")
+        self.assertBlocked("git push -u origin feature", "CLAUDE.md")
+
+    def test_blocks_a_merge_commit_that_adds_a_private_path(self):
+        """git log --name-only prints nothing for a merge without --cc."""
+        self.add_remote()
+        git(self.repo, "push", "-q", "origin", "main")
+        git(self.repo, "checkout", "-q", "-b", "side")
+        self.write("side.py", "s = 1\n")
+        git(self.repo, "add", "side.py")
+        git(self.repo, "commit", "-qm", "feat: side")
+        git(self.repo, "checkout", "-q", "-b", "feat", "main")
+        self.write("feat.py", "f = 1\n")
+        git(self.repo, "add", "feat.py")
+        git(self.repo, "commit", "-qm", "feat: feat")
+        git(self.repo, "merge", "-q", "--no-ff", "--no-commit", "side")
+        self.write("CLAUDE.md", "rules\n")
+        git(self.repo, "add", "-f", "CLAUDE.md")
+        git(self.repo, "commit", "-qm", "chore: merge side")
+        self.assertBlocked("git push origin feat", "CLAUDE.md")
+
 
 class TestMessageFileSafety(GuardTestCase):
     def test_refuses_a_fifo(self):
